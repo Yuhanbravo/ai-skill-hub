@@ -47,6 +47,7 @@ This file is the single source of truth for project handoff.
 - 2026-06-02: Refreshed system status first (`docs/status/skill-hub-status.md`, Updated at `2026-06-02`) and then applied a lightweight post-merge handoff refresh after PR #10 and PR #11. This records that PR #10 merged Post-Dev Dual Refresh v2 governance gates, PR #11 merged the workflow-bootstrap orchestration split, and PR #11 merge commit `7eb65c9f1860c07925292fb438354b84b422819a` is the narrow merge evidence pointer, while preserving `Phase 3 - Controlled System`, delegated protocol ownership, and no skill-behavior / adapter / metadata changes.
 - 2026-06-08: Refreshed system status first (`docs/status/skill-hub-status.md`, Updated at `2026-06-08`) and then applied the PR #12 post-merge closeout. This records PR #12 merged at `981fdb94d0bad2eaec58addf717effdac1b2ec40`, closes the P0 first batch canonical skill prompt / template / example entrypoint cleanup, and sets the next direction as a small independent DeepSeek workflow fix followed by P1 examples coverage rather than continued P0 expansion.
 - 2026-06-11: Refreshed system status first (`docs/status/skill-hub-status.md`, Updated at `2026-06-11`) and then applied the P1 examples coverage closeout. This records P1-A / PR #15 at `8a734ff`, P1-B / PR #16 at `ae97ab4`, and P1-C / PR #17 at `fd6cf10` as merged, closes P1 examples coverage, and keeps P2 as a separate future planning / task-package round rather than starting it here.
+- 2026-07-08: Refreshed system status first (`docs/status/skill-hub-status.md`, Updated at `2026-07-08`) and then refreshed the P1 closeout handoff against current main. This records current observed `origin/main` HEAD `014c007` after PR #21, preserves the P1-A / P1-B / P1-C closeout facts, and adds brief later current-main facts for PR #19, PR #20, and PR #21 without entering F1 adapter/index work.
 
 ## Current Status
 
@@ -54,9 +55,11 @@ This file is the single source of truth for project handoff.
 
 The repository continues to operate as a layered AI capability system rather than a normal business-project codebase. `skills/` remains the stable canonical source, `.agents/skills/` and `.github/skills/` remain derivative discoverability surfaces, governance and tooling remain read-only / local-first, and `docs/HANDOFF.md` plus `docs/status/skill-hub-status.md` remain the active-source coordination documents for system state.
 
-As of the `2026-06-11` status baseline, `main` is at `fd6cf10 docs(skill): expand skill governance examples`. P0 asset entrypoint cleanup is closed, DeepSeek review configuration closeout is closed, and P1 examples coverage is closed. The current state is P1 closeout complete; the repository should not continue adding scattered P1 examples in this line.
+As of the `2026-07-08` status baseline, current observed `origin/main` HEAD is `014c007` after PR #21. P0 asset entrypoint cleanup is closed, DeepSeek review configuration closeout is closed, and P1 examples coverage is closed. The current state is P1 closeout complete; the repository should not continue adding scattered P1 examples in this line.
 
 P1 examples coverage completed in three merged rounds: P1-A expanded `chatgpt-handoff-pilot` invocation examples in PR #15 at `8a734ff`; P1-B expanded `project-takeover` invocation examples in PR #16 at `ae97ab4` and tightened limited-scope / scoped-reuse wording before merge; P1-C expanded `skill-governance` invocation examples in PR #17 at `fd6cf10`, including the follow-up Skill Refactor boundary tightening after Codex review. P1-C also clarified the batch evaluator as read-only sequential evaluation, not batch rewrite.
+
+Later current-main facts are recorded separately from the P1 closeout: PR #19 merged the `financial-data-agent-bootstrap` roadmap plus F0 task package, PR #20 merged the `financial-data-agent-bootstrap` F0 skill skeleton, and PR #21 merged the README structure fix with skill structure validation passing. These facts keep the handoff current without expanding this closeout into F1 adapter/index work or a detailed `financial-data-agent-bootstrap` report.
 
 Skill Catalog / Template Registry Phase 1 is now complete as a documentation indexing closure: `docs/SKILL_CATALOG.md` centralizes skill selection and source-surface boundaries, and `docs/TEMPLATE_REGISTRY.md` centralizes reusable templates, snippets, prompts, examples, and historical candidates. These are index surfaces only; they do not replace canonical `skills/`, they do not promote `tasks/` historical artifacts into canonical templates, and they do not change thin adapter or bridge-reference boundaries.
 
@@ -78,9 +81,9 @@ Core takeover / governance skills now reference that shared vocabulary, and audi
 
 P1 adoption validation has now accepted the shared assessment protocol with light follow-up, and the P1 light follow-up has added protocol mini examples plus a `system-takeover` invocation snippet. The P1.5 `system-takeover` dogfood review concluded `Pass: protocol works for system-level takeover`, confirming that the fields can support system-level assessment output, separate `confirmed` / `inferred` / `pending` evidence, keep `risk_priority` distinct from phase / freshness vocabulary, and keep `maturity_score` optional / where applicable.
 
-The latest system status refresh keeps the repository in `Phase 3 - Controlled System` and adds a current workflow-bootstrap capability signal: PR #10 and PR #11 are now merged evidence, not branch-only or pre-merge work. `documentation-governance` still states that mutable project-status facts belong in declared current-state SSOT surfaces, so `docs/HANDOFF.md` and `docs/status/skill-hub-status.md` remain the active places for current phase, next-phase direction, latest validation, blocker, and pending-merge facts unless a maintainer deliberately declares another current-state SSOT.
+The June system status refresh kept the repository in `Phase 3 - Controlled System` and added a workflow-bootstrap capability signal: PR #10 and PR #11 are merged evidence, not branch-only or pre-merge work. `documentation-governance` still states that mutable project-status facts belong in declared current-state SSOT surfaces, so `docs/HANDOFF.md` and `docs/status/skill-hub-status.md` remain the active places for current phase, next-phase direction, latest validation, blocker, and pending-merge facts unless a maintainer deliberately declares another current-state SSOT.
 
-The latest closeout adds PR #15, PR #16, and PR #17 as merged evidence for P1 examples coverage. It records invocation examples coverage for `chatgpt-handoff-pilot`, `project-takeover`, and `skill-governance`; it does not change prompt bodies, protocols, workflows, `.agents`, tools, registry/index files, docs/status ownership rules, or other skills.
+The P1 closeout records PR #15, PR #16, and PR #17 as merged evidence for P1 examples coverage. It records invocation examples coverage for `chatgpt-handoff-pilot`, `project-takeover`, and `skill-governance`; it does not change prompt bodies, protocols, workflows, `.agents`, tools, registry/index files, docs/status ownership rules, or other skills.
 
 ## Hard Boundaries
 
@@ -97,7 +100,7 @@ The latest closeout adds PR #15, PR #16, and PR #17 as merged evidence for P1 ex
 - `financial-data-project-migration` keeps assessment and execution separated. Its templates describe generated task-package structure; they must not become embedded prompt rulebooks or a second execution protocol.
 - `.agents/skills/*` remains thin wrapper / discovery surface and must not carry prompt bodies or canonical payload text.
 - The PR #12 closeout remains documentation / prompt asset governance only. It does not authorize runtime tool changes, adapter changes, `.github/workflows/*` changes, tests, or additional P0 expansion.
-- The P1 examples coverage closeout is complete as of PR #17 / `fd6cf10`. It does not authorize more P1 example expansion, P2 implementation, workflow changes, `.agents` changes, tools / registry / index changes, prompt body changes, protocol changes, docs/status ownership changes, or broad skill restructuring.
+- The P1 examples coverage work itself closed at PR #17 / `fd6cf10`. That closeout does not authorize more P1 example expansion, P2 implementation, workflow changes, `.agents` changes, tools / registry / index changes, prompt body changes, protocol changes, docs/status ownership changes, or broad skill restructuring.
 - `skills/_protocol/skill_assessment_output.md` is a shared output vocabulary / assessment protocol. It is not an execution controller, validator, CI mechanism, router / pipeline integration, or auto-remediation path.
 - `maturity_score` remains optional / where applicable and must not be forced onto status / handoff skills.
 - `risk_priority` remains assessment output vocabulary. It must not be treated as a project phase gate or as a freshness / staleness label; `phase_risk` and `freshness_risk` remain status / handoff scenario vocabulary where applicable.
@@ -216,7 +219,7 @@ The immediate direction after P1 closeout is not to expand P1. Any P2 work shoul
 1. Treat P1 examples coverage as closed.
 2. Start P2 only through a separate planning / task-package round.
 3. Keep the first P2 step read-only until backlog selection and scope are explicit.
-4. Preserve closeout boundaries: no workflow, `.agents`, tools, registry/index, prompt body, protocol, example, template, or broad skill restructuring changes in this PR.
+4. Preserve closeout boundaries: no workflow, `.agents`, tools, registry/index, prompt body, protocol, example, template, or broad skill restructuring changes in this closeout line.
 
 ## System Takeover Snapshot (2026-04-02)
 

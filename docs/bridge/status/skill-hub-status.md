@@ -14,11 +14,11 @@
 
 
 
-- Updated at: `2026-06-11`
+- Updated at: `2026-07-08`
 - Scope: `ai-skill-hub`
 - Method: `system-status-update` wrapper over `update-project-status`
 - Config: `.codex/skill-config/update-project-status.json`
-- Data sources: Git history through PR #17 squash merge commit `fd6cf10`, working tree, `skills/`, `.agents/`, `.github/`, `tools/`, `docs/status/`, `docs/HANDOFF.md`, and P1-A / P1-B / P1-C post-merge closeout facts supplied by the maintainer.
+- Data sources: Git history through current observed `origin/main` HEAD `014c007`, working tree, `skills/`, `.agents/`, `.github/`, `tools/`, `docs/status/`, `docs/HANDOFF.md`, P1-A / P1-B / P1-C post-merge closeout facts, and later PR #19 / #20 / #21 current-main facts.
 
 ## Layer Status
 
@@ -30,7 +30,8 @@
 - PR #12 completes the P0 first batch of canonical skill prompt / template / example entrypoint cleanup for `workflow-bootstrap`, `financial-data-project-migration`, `system-status-update`, and `system-handoff`.
 - DeepSeek review configuration closeout is complete.
 - P1 examples coverage is complete after PR #15, PR #16, and PR #17 merged into `main`.
-- This closeout records the merged state only; it does not reopen P0, DeepSeek configuration, or P1 examples coverage.
+- Later current-main facts after P1 closeout are recorded without reopening P1: PR #19 merged the `financial-data-agent-bootstrap` roadmap plus F0 task package, PR #20 merged the F0 skill skeleton, and PR #21 merged the README structure fix with skill structure validation passing.
+- This status records the merged state only; it does not reopen P0, DeepSeek configuration, or P1 examples coverage.
 
 ### Prompt / Template / Example Asset Layer
 
@@ -44,6 +45,7 @@
 - P1-A expanded `chatgpt-handoff-pilot` invocation examples in PR #15 at commit `8a734ff`.
 - P1-B expanded `project-takeover` invocation examples in PR #16 at commit `ae97ab4` and tightened limited-scope / scoped-reuse wording before merge.
 - P1-C expanded `skill-governance` invocation examples in PR #17 at commit `fd6cf10`, including the post-review Skill Refactor boundary tightening.
+- PR #21 subsequently confirmed that the `financial-data-agent-bootstrap` README structure fix was merged and skill structure validation passes on current main.
 
 ### Workflow Bootstrap Layer
 
@@ -57,7 +59,7 @@
 - Status: `stable`
 - `system-status-update` owns system-level status-first linked refresh and produces the concise status baseline for handoff.
 - `system-handoff` is the handoff receiver and handoff output boundary owner.
-- This refresh uses the `2026-06-08` status baseline before updating `docs/HANDOFF.md`, preserving phase consistency with the handoff document.
+- This refresh records the `2026-07-08` status baseline at current observed `origin/main` HEAD `014c007`, preserving phase consistency with the handoff document.
 - Current-state SSOT remains the `docs/status/skill-hub-status.md` plus `docs/HANDOFF.md` pair unless a maintainer explicitly declares another current-state SSOT.
 
 ### Review Tooling Layer
@@ -73,13 +75,18 @@
 
 - System phase: `Phase 3 - Controlled System`.
 - Closeout state: P0 asset entrypoint cleanup, DeepSeek review configuration, and P1 examples coverage are merged and complete.
+- Current observed main HEAD after PR #21: `014c007`.
 - Completed P1 rounds:
   - P1-A: `chatgpt-handoff-pilot` invocation examples, PR #15, commit `8a734ff`.
   - P1-B: `project-takeover` invocation examples, PR #16, commit `ae97ab4`.
   - P1-C: `skill-governance` invocation examples, PR #17, commit `fd6cf10`.
+- Later mainline facts:
+  - PR #19: `financial-data-agent-bootstrap` roadmap plus F0 task package.
+  - PR #20: `financial-data-agent-bootstrap` F0 skill skeleton.
+  - PR #21: README structure fix; skill structure validation passes.
 - Phase judgment: the system is no longer in P1 examples coverage construction.
 - Direction: keep P1 closed; any next work should start as a separate P2 planning / backlog-selection round, not as extra P1 examples work.
-- Freshness gate: previous status date was `2026-06-08`; this refresh on `2026-06-11` is within the `14`-day freshness gate, so no staleness warning is added.
+- Freshness gate: previous status date was `2026-06-11`; this refresh on `2026-07-08` resets the handoff/status baseline against current main.
 
 ## Capabilities
 
@@ -105,13 +112,13 @@
 ## Risks / Gaps
 
 - Do not reopen or widen P1 examples coverage in this line.
-- Do not mix P2 planning or backlog selection into this closeout PR.
+- Do not mix P2 planning or backlog selection into this closeout line.
 - Do not drift into `.agents` wrapper changes, workflow changes, registry/index/tools changes, prompt body / protocol changes, or large skill restructuring.
-- Bridge mirror files updated in this closeout remain semantic mirrors of the active HANDOFF/status facts and must not become current-state SSOT.
+- Bridge mirror files, if updated in this closeout, must remain semantic mirrors of the active HANDOFF/status facts and must not become current-state SSOT.
 
 ## Recommended Next Steps
 
 1. Treat P1 examples coverage as closed.
 2. Open any P2 work only as a separate planning / task-package round.
-3. Keep P2 planning read-only until backlog selection and scope are explicit.
+3. Keep P2 planning read-only until a bounded task package is reviewed.
 4. Preserve the current boundaries: no workflow, `.agents`, tools, registry/index, prompt body, protocol, example, template, or broad skill restructuring changes in this closeout line.
