@@ -70,6 +70,7 @@ F2 must not:
 - Add templates or references.
 - Encode real business project rules.
 - Connect any real business repository, data pipeline, mailbox archive, workbook, data service, or production system.
+- Connect `AMS_Data`, `Derivative_Data`, `Pricing_sheet`, or any other real business repo or workflow.
 - Introduce real financial data, real paths, product names, schema names, mailbox rules, credentials, client names, fund names, broker names, custodian names, database details, or business-specific calculation rules.
 
 ## 4. Field-Test Scenario Policy
@@ -158,6 +159,7 @@ Forbidden content includes:
 - real schema, table, column, database, DSN, URL, host, queue, mailbox, subject, attachment, or credential details;
 - real client, fund, broker, custodian, counterparty, issuer, account, portfolio, strategy, product, or registry names;
 - real valuation, NAV, pricing, reconciliation, exception-handling, mailbox-routing, or data-lineage rules;
+- `AMS_Data`, `Derivative_Data`, `Pricing_sheet`, or any concrete facts from those or other real business projects;
 - raw or reconstructable financial data;
 - private mapping tables or samples that could reveal identities or business processes.
 
