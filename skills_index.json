@@ -14,7 +14,7 @@
       "read_only",
       "write_files"
     ],
-    "invocation_example": "Use chatgpt-handoff-pilot for this task. task_description: - Prepare a bounded handoff package for updating docs/HANDOFF.md. constraints: - Do not edit any Python scripts. - Keep docs/HANDOFF.md as the single source of truth. expected_output: - Updated handoff document - Execution report context_files: - docs/HANDOFF.md - AGENTS.md"
+    "invocation_example": ""
   },
   {
     "name": "documentation-governance",
@@ -51,6 +51,23 @@
     "invocation_example": "Use file-structure-check for this task. task_description: - Validate the repository layout against the data-project profile. constraints: - Do not move files or create directories. - Report suggested fixes separately from detected issues. expected_output: - Structure audit report - Missing paths list - Misplaced files list context_files: - skills/ - tests/ - docs/"
   },
   {
+    "name": "financial-data-agent-bootstrap",
+    "path": "skills/financial-data-agent-bootstrap",
+    "category": "project",
+    "triggers": [
+      "bootstrap a financial data agent project",
+      "create financial data project AGENTS template",
+      "define data contract and source contract",
+      "prepare financial data task package",
+      "enforce read-only and production-write boundaries"
+    ],
+    "side_effects": [
+      "read_only",
+      "write_files"
+    ],
+    "invocation_example": "Use financial-data-agent-bootstrap for this task. task_description: - Bootstrap a financial data script project with a thin AGENTS.md, data contract, and validation checklist. constraints: - Do not read real financial data. - Do not write real database credentials or DSNs. - Keep all generated files as placeholder drafts. expected_output: - Project-level AGENTS.md (thin entry) - data_contract draft - source_contract draft - validation checklist draft context_files: - README.md - task_package (if available)"
+  },
+  {
     "name": "financial-data-project-migration",
     "path": "skills/financial-data-project-migration",
     "category": "project",
@@ -82,7 +99,7 @@
       "read_only",
       "write_files"
     ],
-    "invocation_example": "Use project-takeover for this task. task_description: - Prepare a takeover packet for this unfamiliar repository. constraints: - Prefer project-local configuration over shared assumptions. - Do not run install or safe-fix actions unless explicitly authorized. expected_output: - Takeover report - Onboarding summary - Risk list and next steps context_files: - README.md - docs/ - tests/"
+    "invocation_example": ""
   },
   {
     "name": "skill-governance",
@@ -99,7 +116,7 @@
       "read_only",
       "write_files"
     ],
-    "invocation_example": "Use skill-governance on <skill-path> rewrite=false"
+    "invocation_example": ""
   },
   {
     "name": "system-handoff",
@@ -116,7 +133,7 @@
       "read_only",
       "write_files"
     ],
-    "invocation_example": "Use system-handoff for this task. task_description: - Update ai-skill-hub handoff as a system document without rewriting the whole file. constraints: - Reuse chatgpt-handoff-pilot as the canonical handoff flow. - Keep docs/HANDOFF.md section-aware and system-oriented. expected_output: - Current Status - Hard Boundaries - Key Design Decisions - Intentional Gaps - Next Phase Direction context_files: - docs/HANDOFF.md - docs/status/skill-hub-status.md - README.md"
+    "invocation_example": "Use system-handoff for this task. task_description: - Update ai-skill-hub handoff as a system document without rewriting the whole file. constraints: - Reuse chatgpt-handoff-pilot as the canonical handoff flow. - Keep docs/HANDOFF.md section-aware and system-oriented. - Read `docs/status/skill-hub-status.md` first and keep phase consistent with the latest status baseline. expected_output: - Current Status - Hard Boundaries - Key Design Decisions - Intentional Gaps - Next Phase Direction context_files: - docs/HANDOFF.md - docs/status/skill-hub-status.md - README.md"
   },
   {
     "name": "system-status-update",
@@ -134,7 +151,7 @@
       "write_files",
       "requires_git"
     ],
-    "invocation_example": "Use system-status-update for this task. task_description: - Refresh ai-skill-hub as a capability system and report the current layer status. constraints: - Reuse update-project-status as the canonical status engine. - Do not output file-level change lists. expected_output: - Layer Status - Current Phase - Capabilities - Stability context_files: - docs/status/skill-hub-status.md - skills/ - .agents/ - .github/ - tools/"
+    "invocation_example": "Use system-status-update for this task. task_description: - Refresh ai-skill-hub as a capability system and report the current layer status. constraints: - Reuse update-project-status as the canonical status engine. - Do not output file-level change lists. - If `Updated at` is older than 14 days, add a `Staleness` risk item. expected_output: - Layer Status - Current Phase - Capabilities - Stability context_files: - docs/status/skill-hub-status.md - skills/ - .agents/ - .github/ - tools/"
   },
   {
     "name": "system-takeover",
@@ -159,7 +176,7 @@
     "path": "skills/update-project-status",
     "category": "project",
     "triggers": [
-      "refresh project status from Git history",
+      "refresh project status from Git-first or workspace-based signals",
       "generate a weekly project summary",
       "merge commits and task sources into a status report",
       "sync project status to a shared document",
@@ -167,9 +184,25 @@
     ],
     "side_effects": [
       "read_only",
-      "write_files",
-      "requires_git"
+      "write_files"
     ],
-    "invocation_example": "Use update-project-status for this task. task_description: - Refresh the project status report from recent Git history and current task sources. constraints: - Do not install hooks unless explicitly requested. - Treat external sync as opt-in. expected_output: - Updated status summary - Risk and next-step summary - Optional sync decision context_files: - .git/ - README.md - status config files"
+    "invocation_example": "Use update-project-status for this task. task_description: - Refresh the project status report from Git-first signals plus current workspace/task sources. constraints: - Do not install hooks unless explicitly requested. - Treat external sync as opt-in. expected_output: - Updated status summary - Source mode and signal-source breakdown (Git / workspace / task / inferred) - Risk and next-step summary - Optional sync decision context_files: - .git/ - README.md - status config files - docs/**/*"
+  },
+  {
+    "name": "workflow-bootstrap",
+    "path": "skills/workflow-bootstrap",
+    "category": "project",
+    "triggers": [
+      "bootstrap a role-based workflow",
+      "define drafter reviewer implementer reporter final reviewer boundaries",
+      "map canonical guidance to a future runtime pack",
+      "explain thin entry versus full canonical guidance",
+      "document workflow shell boundaries without replacing handoff protocols"
+    ],
+    "side_effects": [
+      "read_only",
+      "write_files"
+    ],
+    "invocation_example": ""
   }
 ]

@@ -22,6 +22,7 @@ This file is the cross-AI, repository-level skill index for tools that cannot au
 | template | handoff / bounded execution | `chatgpt-handoff-pilot` | `skills/chatgpt-handoff-pilot/` | `.agents/skills/chatgpt-handoff-pilot/SKILL.md` | `.agents/skills/chatgpt-handoff-pilot.md` | `.github/skills/chatgpt-handoff-pilot.md` |
 | audit | documentation audit / README governance | `documentation-governance` | `skills/documentation-governance/` | `.agents/skills/documentation-governance/SKILL.md` | `.agents/skills/documentation-governance.md` | `.github/skills/documentation-governance.md` |
 | audit | folder structure audit / misplaced files | `file-structure-check` | `skills/file-structure-check/` | `.agents/skills/file-structure-check/SKILL.md` | `.agents/skills/file-structure-check.md` | `.github/skills/file-structure-check.md` |
+| project | financial data agent bootstrap / contracts / safety boundaries | `financial-data-agent-bootstrap` | `skills/financial-data-agent-bootstrap/` | `.agents/skills/financial-data-agent-bootstrap/SKILL.md` | `.agents/skills/financial-data-agent-bootstrap.md` | `.github/skills/financial-data-agent-bootstrap.md` |
 | project | financial-data migration advisory | `financial-data-project-migration` | `skills/financial-data-project-migration/` | `.agents/skills/financial-data-project-migration/SKILL.md` | `.agents/skills/financial-data-project-migration.md` | `.github/skills/financial-data-project-migration.md` |
 | project | repository onboarding / takeover packet | `project-takeover` | `skills/project-takeover/` | `.agents/skills/project-takeover/SKILL.md` | `.agents/skills/project-takeover.md` | `.github/skills/project-takeover.md` |
 | governance | single-skill evaluation / controlled rewrite | `skill-governance` | `skills/skill-governance/` | `.agents/skills/skill-governance/SKILL.md` | `.agents/skills/skill-governance.md` | `.github/skills/skill-governance.md` |
@@ -59,6 +60,16 @@ This file is the cross-AI, repository-level skill index for tools that cannot au
 - Invocation example: `Use file-structure-check for this task. task_description: Validate the repository layout against the data-project profile.`
 - Inputs: target directory, rules, profile, strictness, optional local overrides
 - Outputs: structure audit report, missing paths, misplaced files, repair suggestions
+
+### financial-data-agent-bootstrap
+
+- Use scenario classification: `agent bootstrap`, `data contract`, `source contract`, `safety boundary`, `task package`
+- Triggers: `bootstrap a financial data agent project`; `create financial data project AGENTS template`; `define data contract and source contract`; `prepare financial data task package`; `enforce read-only and production-write boundaries`
+- Side effects: `read_only`, `write_files`
+- Invocation example: `Use financial-data-agent-bootstrap for this task. task_description: Bootstrap a financial data script project with a thin AGENTS.md, data contract, and validation checklist.`
+- Inputs: project root, task package (if available), project type classification, data domain and source system descriptions
+- Outputs: AGENTS.md draft, data_contract draft, source_contract draft, validation checklist, task_package draft, execution_report draft, handoff template
+- Boundary: operates in Review / Scaffold / Align / Enforce modes; defaults to read-only; do not use for investment advice, trading strategies, alpha research, or provider-specific API manuals
 
 ### financial-data-project-migration
 
