@@ -5,6 +5,7 @@ This file mirrors the canonical skills for AI tools that can inspect `.agents/sk
 | Skill | Canonical path | Wrapper path |
 | --- | --- | --- |
 | `chatgpt-handoff-pilot` | `../../skills/chatgpt-handoff-pilot/` | `./chatgpt-handoff-pilot/SKILL.md` |
+| `codex-project-workflow` | `../../skills/codex-project-workflow/` | `./codex-project-workflow/SKILL.md` |
 | `documentation-governance` | `../../skills/documentation-governance/` | `./documentation-governance/SKILL.md` |
 | `file-structure-check` | `../../skills/file-structure-check/` | `./file-structure-check/SKILL.md` |
 | `financial-data-agent-bootstrap` | `../../skills/financial-data-agent-bootstrap/` | `./financial-data-agent-bootstrap/SKILL.md` |
