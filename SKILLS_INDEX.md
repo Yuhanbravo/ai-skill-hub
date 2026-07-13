@@ -20,6 +20,7 @@ This file is the cross-AI, repository-level skill index for tools that cannot au
 | Category | Use scenario classification | Name | Canonical path | Adapter entry | Flat entry | Copilot entry |
 | --- | --- | --- | --- | --- | --- | --- |
 | template | handoff / bounded execution | `chatgpt-handoff-pilot` | `skills/chatgpt-handoff-pilot/` | `.agents/skills/chatgpt-handoff-pilot/SKILL.md` | `.agents/skills/chatgpt-handoff-pilot.md` | `.github/skills/chatgpt-handoff-pilot.md` |
+| project | bounded repository task / boundaries / preflight / handoff | `codex-project-workflow` | `skills/codex-project-workflow/` | `.agents/skills/codex-project-workflow/SKILL.md` | `.agents/skills/codex-project-workflow.md` | `.github/skills/codex-project-workflow.md` |
 | audit | documentation audit / README governance | `documentation-governance` | `skills/documentation-governance/` | `.agents/skills/documentation-governance/SKILL.md` | `.agents/skills/documentation-governance.md` | `.github/skills/documentation-governance.md` |
 | audit | folder structure audit / misplaced files | `file-structure-check` | `skills/file-structure-check/` | `.agents/skills/file-structure-check/SKILL.md` | `.agents/skills/file-structure-check.md` | `.github/skills/file-structure-check.md` |
 | project | financial data agent bootstrap / contracts / safety boundaries | `financial-data-agent-bootstrap` | `skills/financial-data-agent-bootstrap/` | `.agents/skills/financial-data-agent-bootstrap/SKILL.md` | `.agents/skills/financial-data-agent-bootstrap.md` | `.github/skills/financial-data-agent-bootstrap.md` |
@@ -42,6 +43,15 @@ This file is the cross-AI, repository-level skill index for tools that cannot au
 - Invocation example: `Use chatgpt-handoff-pilot for this task. task_description: Prepare a bounded handoff package for updating docs/HANDOFF.md.`
 - Inputs: task package, local handoff rules, target files or directories
 - Outputs: bounded implementation result, execution report, optional handoff document update
+
+### codex-project-workflow
+
+- Use scenario classification: `bounded repository task`, `Task Card`, `edit boundaries`, `preflight`, `handoff`
+- Triggers: `start a bounded Codex project task`; `prepare a task card and repository preflight`; `implement a repository change with explicit boundaries`; `review or close a Codex implementation round`; `prepare a compact ChatGPT handoff report`
+- Side effects: `read_only`, `write_files`
+- Inputs: project-local instructions, active task package or Task Card, authorized paths, validation requirements
+- Outputs: bounded repository change or review result, validation evidence, concise final report
+- Boundary: preserve project-local authority and read the canonical skill before execution; do not create adapters, indexes, runtime packs, scripts, or project-local files merely by invoking the skill
 
 ### documentation-governance
 

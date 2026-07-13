@@ -17,6 +17,23 @@
     "invocation_example": ""
   },
   {
+    "name": "codex-project-workflow",
+    "path": "skills/codex-project-workflow",
+    "category": "project",
+    "triggers": [
+      "start a bounded Codex project task",
+      "prepare a task card and repository preflight",
+      "implement a repository change with explicit boundaries",
+      "review or close a Codex implementation round",
+      "prepare a compact ChatGPT handoff report"
+    ],
+    "side_effects": [
+      "read_only",
+      "write_files"
+    ],
+    "invocation_example": ""
+  },
+  {
     "name": "documentation-governance",
     "path": "skills/documentation-governance",
     "category": "audit",
