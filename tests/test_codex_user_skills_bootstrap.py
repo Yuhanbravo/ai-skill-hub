@@ -390,16 +390,17 @@ def run_local_check_runner(
     tmp_path: Path,
     path_entries: tuple[Path, ...],
     *,
+    executable: str | None = None,
     conda_env_name: str | None = None,
     extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    shell = POWERSHELL or PWSH
+    shell = executable or POWERSHELL or PWSH
     if not shell:
         pytest.skip("No PowerShell runtime is available")
 
     fake_home = tmp_path / "fake-user-home"
     fake_codex_home = tmp_path / "fake-codex-home"
-    fake_home.mkdir(parents=True)
+    fake_home.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["PATH"] = os.pathsep.join(str(path) for path in path_entries)
     env["PATHEXT"] = ".COM;.EXE;.BAT;.CMD"
@@ -414,7 +415,7 @@ def run_local_check_runner(
     if Path(shell).name.lower() == "powershell.exe":
         command.extend(["-ExecutionPolicy", "Bypass"])
     command.extend(["-File", str(RUN_LOCAL_CHECKS), "-Checks", "router"])
-    if conda_env_name:
+    if conda_env_name is not None:
         command.extend(["-CondaEnvName", conda_env_name])
 
     return subprocess.run(
@@ -445,6 +446,40 @@ def write_failing_python_stub(
     return stub
 
 
+def write_probe_spoof_python_stub(directory: Path, invocation_log: Path) -> Path:
+    stub = directory / "python.cmd"
+    write_text(
+        stub,
+        "@echo off\n"
+        'if "%~1"=="--version" (\n'
+        "  echo Python 3.12.99\n"
+        "  exit /b 0\n"
+        ")\n"
+        f'echo %*>>"{invocation_log}"\n'
+        "exit /b 73\n",
+    )
+    return stub
+
+
+def write_argv_sitecustomize(directory: Path, invocation_log: Path, marker: Path) -> None:
+    write_text(
+        directory / "sitecustomize.py",
+        "import json\n"
+        "import os\n"
+        "import sys\n"
+        "from pathlib import Path\n"
+        "log = Path(os.environ['RUNNER_ARGV_LOG'])\n"
+        "with log.open('a', encoding='utf-8') as stream:\n"
+        "    stream.write(json.dumps(sys.argv) + '\\n')\n"
+        "if r'tests\\test_skill_router.py' in sys.argv:\n"
+        "    Path(os.environ['RUNNER_CHECK_MARKER']).touch()\n",
+    )
+
+
+def available_powershell_runtimes() -> list[str]:
+    return [runtime for runtime in (POWERSHELL, PWSH) if runtime]
+
+
 def system32_path() -> Path:
     return Path(os.environ["SystemRoot"]) / "System32"
 
@@ -467,40 +502,142 @@ def test_runner_skips_9009_python_stub_for_later_valid_python(tmp_path: Path) ->
     assert "[PASS] All selected checks passed." in combined_output
 
 
-def test_runner_explicit_conda_env_precedes_unusable_python(tmp_path: Path) -> None:
+@pytest.mark.parametrize("executable", available_powershell_runtimes())
+def test_runner_rejects_unsafe_conda_names_before_any_execution(
+    tmp_path: Path, executable: str
+) -> None:
     stub_directory = tmp_path / "executor-stubs"
-    write_failing_python_stub(stub_directory)
+    invocation_log = tmp_path / "unexpected-executor-invocations.log"
+    write_failing_python_stub(stub_directory, invocation_log)
+    unsafe_names = (
+        "prod-core-py312 python -c \"print('Python 3.12')\"",
+        "prod core py312",
+        'name"test',
+        "name'test",
+        "name;test",
+        "name&test",
+        "name|test",
+        r"..\env",
+        r"C:\env",
+        "",
+        " ",
+    )
+
+    for unsafe_name in unsafe_names:
+        result = run_local_check_runner(
+            tmp_path,
+            (stub_directory, system32_path()),
+            executable=executable,
+            conda_env_name=unsafe_name,
+        )
+        combined_output = result.stdout + result.stderr
+        assert result.returncode == 2, (unsafe_name, combined_output)
+        assert "Invalid CondaEnvName" in combined_output
+        assert "Running skill-router:" not in combined_output
+        assert "[PASS]" not in combined_output
+
+    assert not invocation_log.exists()
+
+
+@pytest.mark.parametrize("executable", available_powershell_runtimes())
+def test_runner_resolves_valid_conda_name_to_environment_python(
+    tmp_path: Path, executable: str
+) -> None:
+    stub_directory = tmp_path / "executor-stubs"
+    stub_directory.mkdir()
+    conda_root = tmp_path / "Conda Environments" / "prod-core-py312"
+    create_junction(conda_root, Path(sys.executable).parent)
+    conda_info = tmp_path / "conda-info.json"
+    write_text(
+        conda_info,
+        json.dumps({"envs": [str(conda_root)], "root_prefix": str(tmp_path / "base")}),
+    )
     invocation_log = tmp_path / "conda-invocations.log"
     write_text(
         stub_directory / "conda.cmd",
         "@echo off\n"
         'echo %*>>"%EXECUTOR_INVOCATION_LOG%"\n'
-        'if /I not "%~1"=="run" exit /b 91\n'
-        'if /I not "%~2"=="-n" exit /b 92\n'
-        'if /I not "%~3"=="selected-env" exit /b 93\n'
-        'if /I not "%~4"=="python" exit /b 94\n'
-        "shift\n"
-        "shift\n"
-        "shift\n"
-        "shift\n"
-        f'"{sys.executable}" "%~1"\n'
-        "exit /b %ERRORLEVEL%\n",
+        'if /I not "%~1"=="info" exit /b 91\n'
+        'if /I not "%~2"=="--envs" exit /b 92\n'
+        'if /I not "%~3"=="--json" exit /b 93\n'
+        'type "%CONDA_INFO_JSON%"\n'
+        "exit /b 0\n",
     )
 
     result = run_local_check_runner(
         tmp_path,
         (stub_directory, system32_path()),
-        conda_env_name="selected-env",
-        extra_env={"EXECUTOR_INVOCATION_LOG": str(invocation_log)},
+        executable=executable,
+        conda_env_name="prod-core-py312",
+        extra_env={
+            "CONDA_INFO_JSON": str(conda_info),
+            "EXECUTOR_INVOCATION_LOG": str(invocation_log),
+        },
     )
 
     combined_output = result.stdout + result.stderr
     assert result.returncode == 0, combined_output
-    assert "run -n selected-env python" in combined_output
-    invocations = invocation_log.read_text(encoding="utf-8")
-    assert "run -n selected-env python --version" in invocations
-    assert r"run -n selected-env python tests\test_skill_router.py" in invocations
-    assert "SIMULATED_WINDOWS_APPS_STUB" not in combined_output
+    assert f"Executor: {conda_root / 'python.exe'}".casefold() in combined_output.casefold()
+    assert "Conda environment: prod-core-py312" in combined_output
+    assert "info --envs --json" in invocation_log.read_text(encoding="utf-8")
+    assert " run " not in f" {invocation_log.read_text(encoding='utf-8')} "
+    assert "[PASS] All selected checks passed." in combined_output
+
+
+@pytest.mark.parametrize("executable", available_powershell_runtimes())
+def test_runner_preserves_spaced_python_path_and_executes_expected_check(
+    tmp_path: Path, executable: str
+) -> None:
+    python_runtime = tmp_path / "Python Runtime"
+    create_junction(python_runtime, Path(sys.executable).parent)
+    site_directory = tmp_path / "site hook"
+    site_directory.mkdir()
+    invocation_log = tmp_path / "python-argv.jsonl"
+    marker = tmp_path / "expected-check.marker"
+    write_argv_sitecustomize(site_directory, invocation_log, marker)
+
+    result = run_local_check_runner(
+        tmp_path,
+        (python_runtime, system32_path()),
+        executable=executable,
+        extra_env={
+            "PYTHONPATH": str(site_directory),
+            "RUNNER_ARGV_LOG": str(invocation_log),
+            "RUNNER_CHECK_MARKER": str(marker),
+        },
+    )
+
+    combined_output = result.stdout + result.stderr
+    assert result.returncode == 0, combined_output
+    assert f"Executor: {python_runtime / 'python.exe'}".casefold() in combined_output.casefold()
+    assert marker.exists()
+    invocations = [
+        json.loads(line) for line in invocation_log.read_text(encoding="utf-8").splitlines()
+    ]
+    assert any(r"tests\test_skill_router.py" in argv for argv in invocations)
+    assert "[PASS] skill-router" in combined_output
+
+
+@pytest.mark.parametrize("executable", available_powershell_runtimes())
+def test_runner_probe_success_cannot_replace_failed_check(
+    tmp_path: Path, executable: str
+) -> None:
+    stub_directory = tmp_path / "probe-spoof"
+    invocation_log = tmp_path / "formal-check-invocations.log"
+    write_probe_spoof_python_stub(stub_directory, invocation_log)
+
+    result = run_local_check_runner(
+        tmp_path,
+        (stub_directory, system32_path()),
+        executable=executable,
+    )
+
+    combined_output = result.stdout + result.stderr
+    assert result.returncode == 1, combined_output
+    assert r"tests\test_skill_router.py" in invocation_log.read_text(encoding="utf-8")
+    assert "[FAIL] skill-router" in combined_output
+    assert "[PASS] skill-router" not in combined_output
+    assert "[PASS] All selected checks passed." not in combined_output
 
 
 def test_runner_fails_before_checks_when_all_candidates_are_unusable(

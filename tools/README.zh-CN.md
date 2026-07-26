@@ -277,8 +277,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\run_local_checks.p
 - 支持的检查分组是 `router`、`governance`、`smoke`、`all`
 - 默认优先使用 `python`
 - 若 `python` 不可用，则回退到 `py -3`
-- 若两者都不可用但 `conda` 可用，则使用 `conda run -n <env> python`
-- 若当前没有可用活动环境，仍可能需要显式传入 `-CondaEnvName`
+- `-CondaEnvName` 仅接受匹配 `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$` 的简单环境名
+- 显式 Conda 环境通过 `conda info --envs --json` 精确解析，并直接执行环境目录下的 `python.exe`
 - 输出会显式区分 environment / permission / logic 三类失败
 - 这是本地维护入口，不是 CI、controller 或自动修复器
 
