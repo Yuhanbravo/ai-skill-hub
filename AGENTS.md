@@ -3,19 +3,21 @@
 ## Purpose
 This file is the **project-side runtime master entrypoint** for this repository implementation pilot. It is dispatch-oriented and reference-first. It is **not** the canonical source of truth.
 
-Pilot repo: `ai-skill-hub` (single consumer repo implementation pilot with Phase 3D calibration only).
+Pilot repo: `ai-skill-hub` (single consumer repo implementation pilot; Phase 3D calibration is completed).
 
 ## Required Canonical Reading
 Before implementation, read canonical guidance from concrete file paths:
 
 1. `skills/workflow-bootstrap/SKILL.md`
 2. `skills/chatgpt-handoff-pilot/SKILL.md`
-3. `tasks/copilot-codex-workflow_phase3d_canonical_path_calibration_task_package.md`
+
+Completed historical task package reference:
+- `tasks/copilot-codex-workflow_phase3d_canonical_path_calibration_task_package.md`
 
 Conditional project-local canonical payload path (maintainer-filled only if this repo later defines a distinct project-local canonical payload artifact):
 - `<project-local-canonical-skill-path>`
 
-## Field Mapping (Phase 3D calibration over Phase 3C pilot validation)
+## Field Mapping (after Phase 3D calibration)
 ### Fixed fields (canonical contract)
 - This file is the project-side master entrypoint.
 - This file is thin, dispatch-oriented, and reference-first.
@@ -27,7 +29,8 @@ Conditional project-local canonical payload path (maintainer-filled only if this
 - Project identity: `ai-skill-hub`
 - Canonical workflow path: `skills/workflow-bootstrap/SKILL.md`
 - Canonical bounded-execution path: `skills/chatgpt-handoff-pilot/SKILL.md`
-- Active calibration package path: `tasks/copilot-codex-workflow_phase3d_canonical_path_calibration_task_package.md`
+- Active task package: `NONE`
+- Latest completed task package: `tasks/copilot-codex-workflow_phase3d_canonical_path_calibration_task_package.md`
 
 ### Placeholder fields (kept intentionally)
 - `<project-local-canonical-skill-path>`
@@ -38,7 +41,7 @@ Conditional project-local canonical payload path (maintainer-filled only if this
 
 ## High-Level Working Rules
 1. Read required canonical guidance before implementation.
-2. Execute in bounded scope from the active task package.
+2. Execute in bounded scope from the active task package when one is designated.
 3. Record assumptions when ambiguity exists.
 4. Report what was changed and what was explicitly not implemented.
 
