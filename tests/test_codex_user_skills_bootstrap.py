@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "tools" / "manage_codex_user_skills.ps1"
+RUN_LOCAL_CHECKS = ROOT / "tools" / "run_local_checks.ps1"
 DESCRIPTOR = ROOT / "tools" / "codex_user_skills_manifest.json"
 MANIFEST_NAME = ".ai-skill-hub-user-skills.json"
 LOCK_NAME = ".ai-skill-hub-user-skills.lock"
@@ -222,6 +224,65 @@ def safe_snapshot(root: Path) -> tuple[str, ...]:
     return tuple(sorted(records))
 
 
+def is_link_or_junction(path: Path) -> bool:
+    is_junction = getattr(os.path, "isjunction", lambda _: False)
+    return path.is_symlink() or is_junction(path)
+
+
+def user_skill_scope_snapshot(root: Path) -> tuple[str, ...]:
+    if is_link_or_junction(root):
+        try:
+            target_digest = hashlib.sha256(os.fsencode(os.readlink(root))).hexdigest()
+        except OSError:
+            target_digest = "unreadable"
+        return (f".|link|{target_digest}",)
+    if not root.exists():
+        return (".|missing",)
+    if root.is_file():
+        try:
+            digest = hashlib.sha256(root.read_bytes()).hexdigest()
+        except OSError:
+            digest = "unreadable"
+        return (f".|file|{digest}",)
+    if not root.is_dir():
+        return (".|other",)
+
+    records = [".|directory"]
+    pending = [root]
+    while pending:
+        current = pending.pop()
+        try:
+            children = list(os.scandir(current))
+        except (FileNotFoundError, NotADirectoryError, PermissionError):
+            relative = current.relative_to(root).as_posix() or "."
+            records.append(f"{relative}|inaccessible")
+            continue
+
+        for child in sorted(children, key=lambda item: item.name):
+            child_path = Path(child.path)
+            relative = child_path.relative_to(root).as_posix()
+            if is_link_or_junction(child_path):
+                try:
+                    target_digest = hashlib.sha256(
+                        os.fsencode(os.readlink(child_path))
+                    ).hexdigest()
+                except OSError:
+                    target_digest = "unreadable"
+                records.append(f"{relative}|link|{target_digest}")
+            elif child.is_dir(follow_symlinks=False):
+                records.append(f"{relative}|directory")
+                pending.append(child_path)
+            elif child.is_file(follow_symlinks=False):
+                try:
+                    digest = hashlib.sha256(child_path.read_bytes()).hexdigest()
+                except OSError:
+                    digest = "unreadable"
+                records.append(f"{relative}|file|{digest}")
+            else:
+                records.append(f"{relative}|other")
+    return tuple(sorted(records))
+
+
 def sentinel_snapshot(paths: tuple[Path, ...]) -> tuple[tuple[str, bool, int, int], ...]:
     values: list[tuple[str, bool, int, int]] = []
     for path in paths:
@@ -236,16 +297,244 @@ def sentinel_snapshot(paths: tuple[Path, ...]) -> tuple[tuple[str, bool, int, in
 @pytest.fixture(scope="session", autouse=True)
 def protect_real_user_and_business_roots():
     user_home = Path.home()
-    sentinels = (
-        user_home / ".codex",
-        user_home / ".agents",
+    user_skill_roots = (
+        user_home / ".codex" / "skills",
+        user_home / ".agents" / "skills",
+    )
+    business_roots = (
         Path(r"D:\dev\Derivative_Data"),
         Path(r"D:\dev\AMS_Data"),
         Path(r"D:\dev\Workstation_Ops"),
     )
-    before = sentinel_snapshot(sentinels)
+    before_user_skills = tuple(
+        user_skill_scope_snapshot(path) for path in user_skill_roots
+    )
+    before_business_roots = sentinel_snapshot(business_roots)
     yield
-    assert sentinel_snapshot(sentinels) == before
+    assert tuple(user_skill_scope_snapshot(path) for path in user_skill_roots) == (
+        before_user_skills
+    )
+    assert sentinel_snapshot(business_roots) == before_business_roots
+
+
+def test_user_skill_snapshot_ignores_codex_parent_mtime(tmp_path: Path) -> None:
+    codex_parent = tmp_path / ".codex"
+    skills = codex_parent / "skills"
+    write_text(skills / "fixture-skill" / "SKILL.md", "fixture\n")
+    before = user_skill_scope_snapshot(skills)
+    parent_stat = codex_parent.stat()
+
+    os.utime(
+        codex_parent,
+        ns=(parent_stat.st_atime_ns, parent_stat.st_mtime_ns + 1_000_000_000),
+    )
+
+    assert user_skill_scope_snapshot(skills) == before
+
+
+def test_user_skill_snapshot_detects_codex_file_content_change(tmp_path: Path) -> None:
+    skills = tmp_path / ".codex" / "skills"
+    skill_file = skills / "fixture-skill" / "SKILL.md"
+    write_text(skill_file, "first\n")
+    before = user_skill_scope_snapshot(skills)
+
+    write_text(skill_file, "other\n")
+
+    assert user_skill_scope_snapshot(skills) != before
+
+
+def test_user_skill_snapshot_detects_agents_file_addition(tmp_path: Path) -> None:
+    skills = tmp_path / ".agents" / "skills"
+    skills.mkdir(parents=True)
+    before = user_skill_scope_snapshot(skills)
+
+    write_text(skills / "fixture-skill" / "SKILL.md", "fixture\n")
+
+    assert user_skill_scope_snapshot(skills) != before
+
+
+def test_user_skill_snapshot_detects_manifest_creation(tmp_path: Path) -> None:
+    skills = tmp_path / ".codex" / "skills"
+    skills.mkdir(parents=True)
+    before = user_skill_scope_snapshot(skills)
+
+    write_text(skills / MANIFEST_NAME, "{}\n")
+
+    assert user_skill_scope_snapshot(skills) != before
+
+
+def test_user_skill_snapshot_handles_missing_root_stably(tmp_path: Path) -> None:
+    skills = tmp_path / ".codex" / "skills"
+
+    assert user_skill_scope_snapshot(skills) == (".|missing",)
+    assert user_skill_scope_snapshot(skills) == user_skill_scope_snapshot(skills)
+
+
+def test_user_skill_snapshot_detects_deletion_and_type_change(tmp_path: Path) -> None:
+    skills = tmp_path / ".codex" / "skills"
+    entry = skills / "fixture-entry"
+    write_text(entry, "fixture\n")
+    file_snapshot = user_skill_scope_snapshot(skills)
+
+    entry.unlink()
+    missing_entry_snapshot = user_skill_scope_snapshot(skills)
+    entry.mkdir()
+    directory_snapshot = user_skill_scope_snapshot(skills)
+
+    assert missing_entry_snapshot != file_snapshot
+    assert directory_snapshot != missing_entry_snapshot
+    assert directory_snapshot != file_snapshot
+
+
+def run_local_check_runner(
+    tmp_path: Path,
+    path_entries: tuple[Path, ...],
+    *,
+    conda_env_name: str | None = None,
+    extra_env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    shell = POWERSHELL or PWSH
+    if not shell:
+        pytest.skip("No PowerShell runtime is available")
+
+    fake_home = tmp_path / "fake-user-home"
+    fake_codex_home = tmp_path / "fake-codex-home"
+    fake_home.mkdir(parents=True)
+    env = os.environ.copy()
+    env["PATH"] = os.pathsep.join(str(path) for path in path_entries)
+    env["PATHEXT"] = ".COM;.EXE;.BAT;.CMD"
+    env["HOME"] = str(fake_home)
+    env["USERPROFILE"] = str(fake_home)
+    env["CODEX_HOME"] = str(fake_codex_home)
+    env.pop("CONDA_DEFAULT_ENV", None)
+    if extra_env:
+        env.update(extra_env)
+
+    command = [shell, "-NoProfile"]
+    if Path(shell).name.lower() == "powershell.exe":
+        command.extend(["-ExecutionPolicy", "Bypass"])
+    command.extend(["-File", str(RUN_LOCAL_CHECKS), "-Checks", "router"])
+    if conda_env_name:
+        command.extend(["-CondaEnvName", conda_env_name])
+
+    return subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+        env=env,
+    )
+
+
+def write_failing_python_stub(
+    directory: Path, invocation_log: Path | None = None
+) -> Path:
+    stub = directory / "python.cmd"
+    log_command = (
+        f'echo %*>>"{invocation_log}"\n' if invocation_log is not None else ""
+    )
+    write_text(
+        stub,
+        "@echo off\n"
+        + log_command
+        + "echo SIMULATED_WINDOWS_APPS_STUB 1>&2\n"
+        "exit /b 9009\n",
+    )
+    return stub
+
+
+def system32_path() -> Path:
+    return Path(os.environ["SystemRoot"]) / "System32"
+
+
+def test_runner_skips_9009_python_stub_for_later_valid_python(tmp_path: Path) -> None:
+    stub_directory = tmp_path / "windowsapps-stub"
+    stub_invocations = tmp_path / "python-stub-invocations.log"
+    write_failing_python_stub(stub_directory, stub_invocations)
+
+    result = run_local_check_runner(
+        tmp_path,
+        (stub_directory, Path(sys.executable).parent, system32_path()),
+    )
+
+    combined_output = result.stdout + result.stderr
+    assert result.returncode == 0, combined_output
+    assert f"Executor: {sys.executable}".casefold() in combined_output.casefold()
+    assert "--version" in stub_invocations.read_text(encoding="utf-8")
+    assert "SIMULATED_WINDOWS_APPS_STUB" not in combined_output
+    assert "[PASS] All selected checks passed." in combined_output
+
+
+def test_runner_explicit_conda_env_precedes_unusable_python(tmp_path: Path) -> None:
+    stub_directory = tmp_path / "executor-stubs"
+    write_failing_python_stub(stub_directory)
+    invocation_log = tmp_path / "conda-invocations.log"
+    write_text(
+        stub_directory / "conda.cmd",
+        "@echo off\n"
+        'echo %*>>"%EXECUTOR_INVOCATION_LOG%"\n'
+        'if /I not "%~1"=="run" exit /b 91\n'
+        'if /I not "%~2"=="-n" exit /b 92\n'
+        'if /I not "%~3"=="selected-env" exit /b 93\n'
+        'if /I not "%~4"=="python" exit /b 94\n'
+        "shift\n"
+        "shift\n"
+        "shift\n"
+        "shift\n"
+        f'"{sys.executable}" "%~1"\n'
+        "exit /b %ERRORLEVEL%\n",
+    )
+
+    result = run_local_check_runner(
+        tmp_path,
+        (stub_directory, system32_path()),
+        conda_env_name="selected-env",
+        extra_env={"EXECUTOR_INVOCATION_LOG": str(invocation_log)},
+    )
+
+    combined_output = result.stdout + result.stderr
+    assert result.returncode == 0, combined_output
+    assert "run -n selected-env python" in combined_output
+    invocations = invocation_log.read_text(encoding="utf-8")
+    assert "run -n selected-env python --version" in invocations
+    assert r"run -n selected-env python tests\test_skill_router.py" in invocations
+    assert "SIMULATED_WINDOWS_APPS_STUB" not in combined_output
+
+
+def test_runner_fails_before_checks_when_all_candidates_are_unusable(
+    tmp_path: Path,
+) -> None:
+    stub_directory = tmp_path / "only-invalid-python"
+    stub_invocations = tmp_path / "python-stub-invocations.log"
+    write_failing_python_stub(stub_directory, stub_invocations)
+
+    result = run_local_check_runner(
+        tmp_path,
+        (stub_directory, system32_path()),
+    )
+
+    combined_output = result.stdout + result.stderr
+    assert result.returncode == 2, combined_output
+    assert "no Python executor candidate successfully returned version information" in (
+        combined_output
+    )
+    assert "Running skill-router:" not in combined_output
+    assert "--version" in stub_invocations.read_text(encoding="utf-8")
+    assert "SIMULATED_WINDOWS_APPS_STUB" not in combined_output
+
+
+def test_runner_uses_normal_valid_python_unchanged(tmp_path: Path) -> None:
+    result = run_local_check_runner(
+        tmp_path,
+        (Path(sys.executable).parent, system32_path()),
+    )
+
+    combined_output = result.stdout + result.stderr
+    assert result.returncode == 0, combined_output
+    assert f"Executor: {sys.executable}".casefold() in combined_output.casefold()
+    assert "[PASS] All selected checks passed." in combined_output
 
 
 @pytest.fixture()

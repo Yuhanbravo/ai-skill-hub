@@ -62,6 +62,81 @@ function Get-RepoRoot {
     return (Resolve-Path -LiteralPath (Join-Path (Split-Path -Path $scriptFilePath -Parent) '..')).ProviderPath
 }
 
+function Test-ExecutorCandidate {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Candidate
+    )
+
+    $stdoutPath = [System.IO.Path]::GetTempFileName()
+    $stderrPath = [System.IO.Path]::GetTempFileName()
+
+    try {
+        $probeArguments = @($Candidate.base_arguments + '--version')
+        $process = Start-Process `
+            -FilePath $Candidate.program `
+            -ArgumentList $probeArguments `
+            -NoNewWindow `
+            -Wait `
+            -PassThru `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+
+        if ($process.ExitCode -ne 0) {
+            return $false
+        }
+
+        $stdout = if (Test-Path -LiteralPath $stdoutPath) {
+            [string](Get-Content -LiteralPath $stdoutPath -Raw -Encoding UTF8)
+        }
+        else {
+            ''
+        }
+        $stderr = if (Test-Path -LiteralPath $stderrPath) {
+            [string](Get-Content -LiteralPath $stderrPath -Raw -Encoding UTF8)
+        }
+        else {
+            ''
+        }
+        $versionOutput = [string]$stdout + [string]$stderr
+        return $versionOutput -match '(?i)\bPython\s+\d+\.\d+'
+    }
+    catch {
+        return $false
+    }
+    finally {
+        if (Test-Path -LiteralPath $stdoutPath) {
+            Remove-Item -LiteralPath $stdoutPath -Force
+        }
+        if (Test-Path -LiteralPath $stderrPath) {
+            Remove-Item -LiteralPath $stderrPath -Force
+        }
+    }
+}
+
+function Get-ApplicationCandidates {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    $seen = @{}
+    $commands = @(Get-Command $Name -All -CommandType Application -ErrorAction SilentlyContinue)
+    foreach ($command in $commands) {
+        $program = [string]$command.Source
+        if ([string]::IsNullOrWhiteSpace($program)) {
+            continue
+        }
+
+        $key = $program.ToLowerInvariant()
+        if ($seen.ContainsKey($key)) {
+            continue
+        }
+        $seen[$key] = $true
+        $program
+    }
+}
+
 function Get-Executor {
     param(
         [AllowEmptyString()]
@@ -70,54 +145,78 @@ function Get-Executor {
         [switch]$PreferPyLauncher
     )
 
+    $resolvedCondaEnv = ''
+    if (-not [string]::IsNullOrWhiteSpace($PreferredCondaEnv)) {
+        $resolvedCondaEnv = $PreferredCondaEnv.Trim()
+        foreach ($program in @(Get-ApplicationCandidates -Name 'conda')) {
+            $candidate = [pscustomobject]@{
+                kind = 'conda'
+                display_name = "$program run -n $resolvedCondaEnv python"
+                program = $program
+                base_arguments = @('run', '-n', $resolvedCondaEnv, 'python')
+                conda_env = $resolvedCondaEnv
+            }
+            if (Test-ExecutorCandidate -Candidate $candidate) {
+                return $candidate
+            }
+        }
+
+        throw "Environment issue: the explicit Conda environment '$resolvedCondaEnv' did not provide an executable Python that returned version information."
+    }
+
     if (-not $PreferPyLauncher) {
-        $python = Get-Command python -ErrorAction SilentlyContinue
-        if ($null -ne $python) {
-            return [pscustomobject]@{
+        foreach ($program in @(Get-ApplicationCandidates -Name 'python')) {
+            $candidate = [pscustomobject]@{
                 kind = 'python'
-                display_name = 'python'
-                program = $python.Source
+                display_name = $program
+                program = $program
                 base_arguments = @()
                 conda_env = ''
+            }
+            if (Test-ExecutorCandidate -Candidate $candidate) {
+                return $candidate
             }
         }
     }
 
-    $py = Get-Command py -ErrorAction SilentlyContinue
-    if ($null -ne $py) {
-        return [pscustomobject]@{
+    foreach ($program in @(Get-ApplicationCandidates -Name 'py')) {
+        $candidate = [pscustomobject]@{
             kind = 'py'
-            display_name = 'py -3'
-            program = $py.Source
+            display_name = "$program -3"
+            program = $program
             base_arguments = @('-3')
             conda_env = ''
         }
-    }
-
-    $conda = Get-Command conda -ErrorAction SilentlyContinue
-    $resolvedCondaEnv = ''
-    if (-not [string]::IsNullOrWhiteSpace($PreferredCondaEnv)) {
-        $resolvedCondaEnv = $PreferredCondaEnv.Trim()
-    }
-    elseif (-not [string]::IsNullOrWhiteSpace($env:CONDA_DEFAULT_ENV)) {
-        $resolvedCondaEnv = $env:CONDA_DEFAULT_ENV.Trim()
-    }
-
-    if (($null -ne $conda) -and -not [string]::IsNullOrWhiteSpace($resolvedCondaEnv)) {
-        return [pscustomobject]@{
-            kind = 'conda'
-            display_name = "conda run -n $resolvedCondaEnv python"
-            program = $conda.Source
-            base_arguments = @('run', '-n', $resolvedCondaEnv, 'python')
-            conda_env = $resolvedCondaEnv
+        if (Test-ExecutorCandidate -Candidate $candidate) {
+            return $candidate
         }
     }
 
-    if ($null -ne $conda) {
-        throw 'Environment issue: python/py is unavailable and conda was found, but no conda environment was provided or active. Pass -CondaEnvName explicitly.'
+    if (-not [string]::IsNullOrWhiteSpace($env:CONDA_DEFAULT_ENV)) {
+        $resolvedCondaEnv = $env:CONDA_DEFAULT_ENV.Trim()
     }
 
-    throw 'Environment issue: python, py, and conda are all unavailable.'
+    $condaPrograms = @(Get-ApplicationCandidates -Name 'conda')
+    if (-not [string]::IsNullOrWhiteSpace($resolvedCondaEnv)) {
+        foreach ($program in $condaPrograms) {
+            $candidate = [pscustomobject]@{
+                kind = 'conda'
+                display_name = "$program run -n $resolvedCondaEnv python"
+                program = $program
+                base_arguments = @('run', '-n', $resolvedCondaEnv, 'python')
+                conda_env = $resolvedCondaEnv
+            }
+            if (Test-ExecutorCandidate -Candidate $candidate) {
+                return $candidate
+            }
+        }
+    }
+
+    if (($condaPrograms.Count -gt 0) -and [string]::IsNullOrWhiteSpace($resolvedCondaEnv)) {
+        throw 'Environment issue: no executable Python candidate was found, and Conda has no provided or active environment. Pass -CondaEnvName explicitly.'
+    }
+
+    throw 'Environment issue: no Python executor candidate successfully returned version information.'
 }
 
 function Get-CheckCatalog {
