@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "manager": "ai-skill-hub.codex-user-skills/v1",
+  "bundle_name": "codex-user-skills-bootstrap-v1",
+  "bundle_version": 1,
+  "primary_skills": [
+    "workflow-bootstrap",
+    "chatgpt-handoff-pilot"
+  ],
+  "managed_entries": [
+    {
+      "relative_source_path": "skills/workflow-bootstrap",
+      "relative_target_path": "workflow-bootstrap",
+      "object_role": "skill",
+      "skill_name": "workflow-bootstrap",
+      "dependency_of": [],
+      "included_files": []
+    },
+    {
+      "relative_source_path": "skills/chatgpt-handoff-pilot",
+      "relative_target_path": "chatgpt-handoff-pilot",
+      "object_role": "skill",
+      "skill_name": "chatgpt-handoff-pilot",
+      "dependency_of": [],
+      "included_files": []
+    },
+    {
+      "relative_source_path": "skills/_protocol",
+      "relative_target_path": "_protocol",
+      "object_role": "dependency_container",
+      "skill_name": null,
+      "dependency_of": [
+        "workflow-bootstrap",
+        "chatgpt-handoff-pilot"
+      ],
+      "included_files": [
+        "skill_assessment_output.md"
+      ]
+    }
+  ]
+}

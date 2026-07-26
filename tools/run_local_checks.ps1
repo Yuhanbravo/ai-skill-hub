@@ -3,6 +3,7 @@ param(
     [ValidateSet('router', 'governance', 'smoke', 'all')]
     [string]$Checks = 'smoke',
 
+    [AllowEmptyString()]
     [string]$CondaEnvName,
 
     [switch]$UsePyLauncher
@@ -62,6 +63,134 @@ function Get-RepoRoot {
     return (Resolve-Path -LiteralPath (Join-Path (Split-Path -Path $scriptFilePath -Parent) '..')).ProviderPath
 }
 
+function Test-ExecutorCandidate {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Candidate
+    )
+
+    try {
+        $probeArguments = @($Candidate.base_arguments) + @('--version')
+        $probeOutput = @(& $Candidate.program @probeArguments 2>&1)
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -ne 0) {
+            return $false
+        }
+
+        $versionOutput = ($probeOutput | Out-String).Trim()
+        return $versionOutput -match '(?i)\APython\s+\d+\.\d+(?:\.\d+)?(?:[a-z]+\d*)?\z'
+    }
+    catch {
+        return $false
+    }
+}
+
+function Get-ApplicationCandidates {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    $seen = @{}
+    $commands = @(Get-Command $Name -All -CommandType Application -ErrorAction SilentlyContinue)
+    foreach ($command in $commands) {
+        $program = [string]$command.Source
+        if ([string]::IsNullOrWhiteSpace($program)) {
+            continue
+        }
+
+        $key = $program.ToLowerInvariant()
+        if ($seen.ContainsKey($key)) {
+            continue
+        }
+        $seen[$key] = $true
+        if (Test-Path -LiteralPath $program -PathType Leaf) {
+            (Resolve-Path -LiteralPath $program).ProviderPath
+        }
+    }
+}
+
+function Test-CondaEnvironmentName {
+    param(
+        [AllowEmptyString()]
+        [string]$Name
+    )
+
+    return (
+        -not [string]::IsNullOrWhiteSpace($Name) -and
+        $Name -cmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'
+    )
+}
+
+function Get-CondaEnvironmentExecutor {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$EnvironmentName
+    )
+
+    foreach ($condaProgram in @(Get-ApplicationCandidates -Name 'conda')) {
+        try {
+            $infoArguments = @('info', '--envs', '--json')
+            $infoOutput = @(& $condaProgram @infoArguments 2>&1)
+            $infoExitCode = $LASTEXITCODE
+            if ($infoExitCode -ne 0) {
+                continue
+            }
+
+            $info = ($infoOutput | Out-String) | ConvertFrom-Json
+            $environmentRoots = @($info.envs)
+            if (
+                $EnvironmentName -ceq 'base' -and
+                -not [string]::IsNullOrWhiteSpace([string]$info.root_prefix)
+            ) {
+                $environmentRoots = @([string]$info.root_prefix) + $environmentRoots
+            }
+
+            foreach ($environmentRootValue in $environmentRoots) {
+                if ([string]::IsNullOrWhiteSpace([string]$environmentRootValue)) {
+                    continue
+                }
+
+                $environmentRoot = [System.IO.Path]::GetFullPath(
+                    ([string]$environmentRootValue).TrimEnd('\', '/')
+                )
+                $resolvedName = Split-Path -Path $environmentRoot -Leaf
+                if (
+                    $EnvironmentName -cne $resolvedName -and
+                    -not (
+                        $EnvironmentName -ceq 'base' -and
+                        [string]$environmentRoot -ceq [string]$info.root_prefix
+                    )
+                ) {
+                    continue
+                }
+
+                $pythonExecutable = Join-Path $environmentRoot 'python.exe'
+                if (-not (Test-Path -LiteralPath $pythonExecutable -PathType Leaf)) {
+                    continue
+                }
+
+                $resolvedPython = (Resolve-Path -LiteralPath $pythonExecutable).ProviderPath
+                $candidate = [pscustomobject]@{
+                    kind = 'conda'
+                    display_name = $resolvedPython
+                    program = $resolvedPython
+                    base_arguments = @()
+                    conda_env = $EnvironmentName
+                }
+                if (Test-ExecutorCandidate -Candidate $candidate) {
+                    return $candidate
+                }
+            }
+        }
+        catch {
+            continue
+        }
+    }
+
+    throw "Environment issue: the explicit Conda environment '$EnvironmentName' did not resolve to an executable python.exe that returned version information."
+}
+
 function Get-Executor {
     param(
         [AllowEmptyString()]
@@ -70,137 +199,130 @@ function Get-Executor {
         [switch]$PreferPyLauncher
     )
 
+    if (-not [string]::IsNullOrWhiteSpace($PreferredCondaEnv)) {
+        return Get-CondaEnvironmentExecutor -EnvironmentName $PreferredCondaEnv
+    }
+
     if (-not $PreferPyLauncher) {
-        $python = Get-Command python -ErrorAction SilentlyContinue
-        if ($null -ne $python) {
-            return [pscustomobject]@{
+        foreach ($program in @(Get-ApplicationCandidates -Name 'python')) {
+            $candidate = [pscustomobject]@{
                 kind = 'python'
-                display_name = 'python'
-                program = $python.Source
+                display_name = $program
+                program = $program
                 base_arguments = @()
                 conda_env = ''
             }
+            if (Test-ExecutorCandidate -Candidate $candidate) {
+                return $candidate
+            }
         }
     }
 
-    $py = Get-Command py -ErrorAction SilentlyContinue
-    if ($null -ne $py) {
-        return [pscustomobject]@{
+    foreach ($program in @(Get-ApplicationCandidates -Name 'py')) {
+        $candidate = [pscustomobject]@{
             kind = 'py'
-            display_name = 'py -3'
-            program = $py.Source
+            display_name = "$program -3"
+            program = $program
             base_arguments = @('-3')
             conda_env = ''
         }
-    }
-
-    $conda = Get-Command conda -ErrorAction SilentlyContinue
-    $resolvedCondaEnv = ''
-    if (-not [string]::IsNullOrWhiteSpace($PreferredCondaEnv)) {
-        $resolvedCondaEnv = $PreferredCondaEnv.Trim()
-    }
-    elseif (-not [string]::IsNullOrWhiteSpace($env:CONDA_DEFAULT_ENV)) {
-        $resolvedCondaEnv = $env:CONDA_DEFAULT_ENV.Trim()
-    }
-
-    if (($null -ne $conda) -and -not [string]::IsNullOrWhiteSpace($resolvedCondaEnv)) {
-        return [pscustomobject]@{
-            kind = 'conda'
-            display_name = "conda run -n $resolvedCondaEnv python"
-            program = $conda.Source
-            base_arguments = @('run', '-n', $resolvedCondaEnv, 'python')
-            conda_env = $resolvedCondaEnv
+        if (Test-ExecutorCandidate -Candidate $candidate) {
+            return $candidate
         }
     }
 
-    if ($null -ne $conda) {
-        throw 'Environment issue: python/py is unavailable and conda was found, but no conda environment was provided or active. Pass -CondaEnvName explicitly.'
+    if (
+        -not [string]::IsNullOrWhiteSpace($env:CONDA_DEFAULT_ENV) -and
+        (Test-CondaEnvironmentName -Name $env:CONDA_DEFAULT_ENV)
+    ) {
+        try {
+            return Get-CondaEnvironmentExecutor -EnvironmentName $env:CONDA_DEFAULT_ENV
+        }
+        catch {
+            # Continue to the single environment error below.
+        }
     }
 
-    throw 'Environment issue: python, py, and conda are all unavailable.'
+    if (@(Get-ApplicationCandidates -Name 'conda').Count -gt 0) {
+        throw 'Environment issue: no executable Python candidate was found, and Conda has no provided or active environment. Pass -CondaEnvName explicitly.'
+    }
+
+    throw 'Environment issue: no Python executor candidate successfully returned version information.'
 }
 
 function Get-CheckCatalog {
+    $skillRouter = @{
+        name = 'skill-router'
+        args = @('tests\test_skill_router.py')
+        expected_evidence = 'tests\test_skill_router.py'
+    }
+    $adapterConsistency = @{
+        name = 'adapter-consistency-smoke'
+        args = @('tests\test_adapter_consistency_smoke.py')
+        expected_evidence = 'tests\test_adapter_consistency_smoke.py'
+    }
+    $commitConvention = @{
+        name = 'commit-convention'
+        args = @('tests\test_commit_convention_check.py')
+        expected_evidence = 'tests\test_commit_convention_check.py'
+    }
+    $hubAdapterContract = @{
+        name = 'hub-adapter-contract'
+        args = @('tools\check_adapter_consistency.py', '.', '--mode', 'hub')
+        expected_evidence = 'tools\check_adapter_consistency.py'
+    }
+    $dryRunNoSideEffects = @{
+        name = 'dryrun-no-side-effects'
+        args = @('tests\test_dryrun_no_side_effects.py')
+        expected_evidence = 'tests\test_dryrun_no_side_effects.py'
+    }
+    $codexUserSkillsBootstrap = @{
+        name = 'codex-user-skills-bootstrap'
+        args = @('-m', 'pytest', 'tests\test_codex_user_skills_bootstrap.py', '-q', '-p', 'no:cacheprovider')
+        expected_evidence = 'tests\test_codex_user_skills_bootstrap.py'
+    }
+    $reseedAudit = @{
+        name = 'reseed-audit'
+        args = @('tests\test_audit_reseed_targets.py')
+        expected_evidence = 'tests\test_audit_reseed_targets.py'
+    }
+    $syncSmoke = @{
+        name = 'sync-smoke'
+        args = @('tests\test_sync_skills_to_nongit_project.py')
+        expected_evidence = 'tests\test_sync_skills_to_nongit_project.py'
+    }
+    $skillStructure = @{
+        name = 'skill-structure'
+        args = @('tests\test_skill_structure.py')
+        expected_evidence = 'tests\test_skill_structure.py'
+    }
+
     return [ordered]@{
-        router = @(
-            @{
-                name = 'skill-router'
-                args = @('tests\test_skill_router.py')
-            }
-        )
+        router = @($skillRouter)
         governance = @(
-            @{
-                name = 'adapter-consistency-smoke'
-                args = @('tests\test_adapter_consistency_smoke.py')
-            }
-            @{
-                name = 'commit-convention'
-                args = @('tests\test_commit_convention_check.py')
-            }
-            @{
-                name = 'hub-adapter-contract'
-                args = @('tools\check_adapter_consistency.py', '.', '--mode', 'hub')
-            }
+            $adapterConsistency
+            $commitConvention
+            $hubAdapterContract
         )
         smoke = @(
-            @{
-                name = 'skill-router'
-                args = @('tests\test_skill_router.py')
-            }
-            @{
-                name = 'adapter-consistency-smoke'
-                args = @('tests\test_adapter_consistency_smoke.py')
-            }
-            @{
-                name = 'commit-convention'
-                args = @('tests\test_commit_convention_check.py')
-            }
-            @{
-                name = 'hub-adapter-contract'
-                args = @('tools\check_adapter_consistency.py', '.', '--mode', 'hub')
-            }
-            @{
-                name = 'dryrun-no-side-effects'
-                args = @('tests\test_dryrun_no_side_effects.py')
-            }
-            @{
-                name = 'reseed-audit'
-                args = @('tests\test_audit_reseed_targets.py')
-            }
+            $skillRouter
+            $adapterConsistency
+            $commitConvention
+            $hubAdapterContract
+            $dryRunNoSideEffects
+            $codexUserSkillsBootstrap
+            $reseedAudit
         )
         all = @(
-            @{
-                name = 'skill-router'
-                args = @('tests\test_skill_router.py')
-            }
-            @{
-                name = 'adapter-consistency-smoke'
-                args = @('tests\test_adapter_consistency_smoke.py')
-            }
-            @{
-                name = 'commit-convention'
-                args = @('tests\test_commit_convention_check.py')
-            }
-            @{
-                name = 'hub-adapter-contract'
-                args = @('tools\check_adapter_consistency.py', '.', '--mode', 'hub')
-            }
-            @{
-                name = 'dryrun-no-side-effects'
-                args = @('tests\test_dryrun_no_side_effects.py')
-            }
-            @{
-                name = 'reseed-audit'
-                args = @('tests\test_audit_reseed_targets.py')
-            }
-            @{
-                name = 'sync-smoke'
-                args = @('tests\test_sync_skills_to_nongit_project.py')
-            }
-            @{
-                name = 'skill-structure'
-                args = @('tests\test_skill_structure.py')
-            }
+            $skillRouter
+            $adapterConsistency
+            $commitConvention
+            $hubAdapterContract
+            $dryRunNoSideEffects
+            $codexUserSkillsBootstrap
+            $reseedAudit
+            $syncSmoke
+            $skillStructure
         )
     }
 }
@@ -241,44 +363,30 @@ function Invoke-Check {
         [hashtable]$CheckDefinition
     )
 
-    $arguments = @($Executor.base_arguments + $CheckDefinition.args)
+    $arguments = @($Executor.base_arguments) + @($CheckDefinition.args)
+    $expectedEvidence = [string]$CheckDefinition.expected_evidence
     Write-Info ("Running {0}: {1} {2}" -f $CheckDefinition.name, $Executor.display_name, ($CheckDefinition.args -join ' '))
 
-    $stdoutPath = [System.IO.Path]::GetTempFileName()
-    $stderrPath = [System.IO.Path]::GetTempFileName()
+    if ([string]::IsNullOrWhiteSpace($expectedEvidence) -or $arguments -cnotcontains $expectedEvidence) {
+        return [pscustomobject]@{
+            name = $CheckDefinition.name
+            resolved_executor = $Executor.program
+            exact_argument_array = @($arguments)
+            expected_evidence = $expectedEvidence
+            status = 'failed'
+            failure_type = 'logic'
+            exit_code = -1
+        }
+    }
 
     try {
-        $process = Start-Process `
-            -FilePath $Executor.program `
-            -ArgumentList $arguments `
-            -NoNewWindow `
-            -Wait `
-            -PassThru `
-            -RedirectStandardOutput $stdoutPath `
-            -RedirectStandardError $stderrPath
-
-        $stdout = if (Test-Path -LiteralPath $stdoutPath) {
-            [string](Get-Content -LiteralPath $stdoutPath -Raw)
-        }
-        else {
-            ''
-        }
-        $stderr = if (Test-Path -LiteralPath $stderrPath) {
-            [string](Get-Content -LiteralPath $stderrPath -Raw)
-        }
-        else {
-            ''
-        }
-        $output = ([string]$stdout + [string]$stderr).TrimEnd()
-        $exitCode = $process.ExitCode
+        $nativeOutput = @(& $Executor.program @arguments 2>&1)
+        $exitCode = $LASTEXITCODE
+        $output = ($nativeOutput | Out-String).TrimEnd()
     }
-    finally {
-        if (Test-Path -LiteralPath $stdoutPath) {
-            Remove-Item -LiteralPath $stdoutPath -Force
-        }
-        if (Test-Path -LiteralPath $stderrPath) {
-            Remove-Item -LiteralPath $stderrPath -Force
-        }
+    catch {
+        $output = $_.Exception.Message
+        $exitCode = 1
     }
 
     if (-not [string]::IsNullOrWhiteSpace($output)) {
@@ -288,6 +396,9 @@ function Invoke-Check {
     if ($exitCode -eq 0) {
         return [pscustomobject]@{
             name = $CheckDefinition.name
+            resolved_executor = $Executor.program
+            exact_argument_array = @($arguments)
+            expected_evidence = $expectedEvidence
             status = 'passed'
             failure_type = ''
             exit_code = 0
@@ -296,9 +407,21 @@ function Invoke-Check {
 
     return [pscustomobject]@{
         name = $CheckDefinition.name
+        resolved_executor = $Executor.program
+        exact_argument_array = @($arguments)
+        expected_evidence = $expectedEvidence
         status = 'failed'
         failure_type = (Classify-Failure -Output $output)
         exit_code = $exitCode
+    }
+}
+
+if ($PSBoundParameters.ContainsKey('CondaEnvName')) {
+    if (-not (Test-CondaEnvironmentName -Name $CondaEnvName)) {
+        [Console]::Error.WriteLine(
+            '[FAIL] Invalid CondaEnvName. Use 1-128 characters matching ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$; paths, whitespace, quotes, shell characters, and extra arguments are not allowed.'
+        )
+        exit 2
     }
 }
 
@@ -316,10 +439,14 @@ New-Item -ItemType Directory -Path $localTempRoot -Force | Out-Null
 $originalTemp = $env:TEMP
 $originalTmp = $env:TMP
 $originalTmpDir = $env:TMPDIR
+$originalPythonUtf8 = $env:PYTHONUTF8
+$originalPythonIoEncoding = $env:PYTHONIOENCODING
 
 $env:TEMP = $localTempRoot
 $env:TMP = $localTempRoot
 $env:TMPDIR = $localTempRoot
+$env:PYTHONUTF8 = '1'
+$env:PYTHONIOENCODING = 'utf-8'
 
 $results = @()
 $executor = $null
@@ -374,6 +501,8 @@ finally {
     $env:TEMP = $originalTemp
     $env:TMP = $originalTmp
     $env:TMPDIR = $originalTmpDir
+    $env:PYTHONUTF8 = $originalPythonUtf8
+    $env:PYTHONIOENCODING = $originalPythonIoEncoding
 }
 
 Write-Section 'Summary'
