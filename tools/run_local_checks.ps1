@@ -164,6 +164,10 @@ function Get-CheckCatalog {
                 args = @('tests\test_dryrun_no_side_effects.py')
             }
             @{
+                name = 'codex-user-skills-bootstrap'
+                args = @('-m', 'pytest', 'tests\test_codex_user_skills_bootstrap.py', '-q', '-p', 'no:cacheprovider')
+            }
+            @{
                 name = 'reseed-audit'
                 args = @('tests\test_audit_reseed_targets.py')
             }
@@ -188,6 +192,10 @@ function Get-CheckCatalog {
             @{
                 name = 'dryrun-no-side-effects'
                 args = @('tests\test_dryrun_no_side_effects.py')
+            }
+            @{
+                name = 'codex-user-skills-bootstrap'
+                args = @('-m', 'pytest', 'tests\test_codex_user_skills_bootstrap.py', '-q', '-p', 'no:cacheprovider')
             }
             @{
                 name = 'reseed-audit'
@@ -258,13 +266,13 @@ function Invoke-Check {
             -RedirectStandardError $stderrPath
 
         $stdout = if (Test-Path -LiteralPath $stdoutPath) {
-            [string](Get-Content -LiteralPath $stdoutPath -Raw)
+            [string](Get-Content -LiteralPath $stdoutPath -Raw -Encoding UTF8)
         }
         else {
             ''
         }
         $stderr = if (Test-Path -LiteralPath $stderrPath) {
-            [string](Get-Content -LiteralPath $stderrPath -Raw)
+            [string](Get-Content -LiteralPath $stderrPath -Raw -Encoding UTF8)
         }
         else {
             ''
@@ -316,10 +324,14 @@ New-Item -ItemType Directory -Path $localTempRoot -Force | Out-Null
 $originalTemp = $env:TEMP
 $originalTmp = $env:TMP
 $originalTmpDir = $env:TMPDIR
+$originalPythonUtf8 = $env:PYTHONUTF8
+$originalPythonIoEncoding = $env:PYTHONIOENCODING
 
 $env:TEMP = $localTempRoot
 $env:TMP = $localTempRoot
 $env:TMPDIR = $localTempRoot
+$env:PYTHONUTF8 = '1'
+$env:PYTHONIOENCODING = 'utf-8'
 
 $results = @()
 $executor = $null
@@ -374,6 +386,8 @@ finally {
     $env:TEMP = $originalTemp
     $env:TMP = $originalTmp
     $env:TMPDIR = $originalTmpDir
+    $env:PYTHONUTF8 = $originalPythonUtf8
+    $env:PYTHONIOENCODING = $originalPythonIoEncoding
 }
 
 Write-Section 'Summary'

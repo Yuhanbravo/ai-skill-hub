@@ -155,6 +155,54 @@
 - 项目消费侧目录仍固定写入 `.codex\skills`，不因 hub canonical 名称切换而改名。
 - 同步后会在目标项目写入一个 `_skillset_version.txt` 元数据文件。
 - 全量同步时会同步 canonical skill 目录与 `_protocol/`，不会再把 `skills/` 根下的说明文件和模板文件一起下发。
+- **严禁**把 `$HOME`、`$CODEX_HOME` 或 `$CODEX_HOME\skills` 作为该工具的 `-ProjectPath`。它使用项目镜像和 stale-cleanup 语义，不是用户级技能安装器。
+
+## manage_codex_user_skills.ps1
+
+用途：
+
+- 从当前 `ai-skill-hub` 本地 Git checkout，把冻结的 V1 bundle 受控复制到 `$CODEX_HOME\skills`。
+- V1 bundle 固定为 `workflow-bootstrap`、`chatgpt-handoff-pilot`，以及两者共同依赖的 `_protocol/skill_assessment_output.md`。
+
+安全默认调用：
+
+```powershell
+.\tools\manage_codex_user_skills.ps1
+.\tools\manage_codex_user_skills.ps1 -Action Check
+.\tools\manage_codex_user_skills.ps1 -Action Plan
+```
+
+显式写操作：
+
+```powershell
+.\tools\manage_codex_user_skills.ps1 -Action Apply
+.\tools\manage_codex_user_skills.ps1 -Action Uninstall
+```
+
+结构化输出：
+
+```powershell
+.\tools\manage_codex_user_skills.ps1 -Action Check -OutputFormat Json
+```
+
+冻结参数：
+
+- `-Action`：`Check`、`Plan`、`Apply`、`Uninstall`；默认 `Check`
+- `-RepositoryRoot`：可选的本地 hub checkout，主要用于移动后的 checkout 或隔离测试
+- `-OutputFormat`：`Text` 或 `Json`
+
+安全边界：
+
+- `Check` 和 `Plan` 零写入；`Apply`/`Uninstall` 必须显式指定。
+- 只管理 source descriptor 声明的完整 V1 bundle，不支持 `-Skill`、`-Force`、`-Adopt`、`-Mirror` 或部分卸载。
+- ownership manifest 位于 `$CODEX_HOME\skills\.ai-skill-hub-user-skills.json`；未知对象、local modification、无效 manifest、链接/reparse point 和 stale transaction 都会 fail closed。
+- staging、backup、transaction journal 和 lock 都位于同一个 `$CODEX_HOME\skills` 根下；manifest 最后写入，失败时按 journal 回滚。
+- `.system` 永久排除；工具不会清理整个用户技能目录，也不会删除无关用户技能。
+- 本轮仓库验证只允许使用临时 `CODEX_HOME`。真实用户安装需要独立授权；文件复制成功也不代表 Codex App/CLI 已完成技能发现验证。
+
+完整 Windows 流程见：
+
+- `docs/human/CODEX_USER_SKILLS_BOOTSTRAP_WINDOWS.md`
 
 ## generate_skill_metadata.py
 
@@ -270,5 +318,6 @@ python .\tools\audit_derivative_surfaces.py --preview-lines 20
 - 想“从 bundle 恢复或更新 hub”，用 `import_bundle.ps1`。
 - 想“把项目里改好的单个 skill 回收到 hub”，用 `sync_skill_from_project_to_hub.ps1`。
 - 想“把 hub 的 skill 下发到业务项目”，用 `sync_skills_to_nongit_project.ps1`。
+- 想“检查或受控管理 Codex 用户级冻结 V1 bundle”，用 `manage_codex_user_skills.ps1`；不要改用项目同步工具。
 - 想“显式暴露 bridge mirror drift 和 invocation-example source drift，但不做修复”，用 `audit_derivative_surfaces.py`。
 - 想“快速跑本地验证并看清是环境问题还是仓库问题”，用 `run_local_checks.ps1`。
