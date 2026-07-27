@@ -1,10 +1,21 @@
 # Skill Hub Status
 
-- Updated at: `2026-07-08`
+- Updated at: `2026-07-27`
 - Scope: `ai-skill-hub`
 - Method: `system-status-update` wrapper over `update-project-status`
 - Config: `.codex/skill-config/update-project-status.json`
-- Data sources: Git history through current observed `origin/main` HEAD `014c007`, working tree, `skills/`, `.agents/`, `.github/`, `tools/`, `docs/status/`, `docs/HANDOFF.md`, P1-A / P1-B / P1-C post-merge closeout facts, and later PR #19 / #20 / #21 current-main facts.
+- Data sources: Git history through current observed `origin/main` HEAD `6707cb3`, working tree, `skills/`, `.agents/`, `.github/`, `tools/`, `docs/status/`, `docs/HANDOFF.md`, the Codex User Skills Bootstrap V1 Stage D closure report, and the real-host Check evidence.
+
+## Codex User Skills Bootstrap V1 Closure
+
+- Implementation: `MERGED_AND_PUBLISHED` at baseline commit `f57ae3e9d89fb3432fbb8b7c572042b69f6fcc58`.
+- Real installation: `COMPLETE`; current Check returned `NO_CHANGE_CODEX_USER_SKILLS_ALREADY_CURRENT` with exit code `0`.
+- CLI E2E: `PASS`.
+- Codex App E2E: `PASS`.
+- Host E2E: `FULLY_CLOSED`.
+- Idempotency, shared protocol use, `.system` protection, ownership-manifest validity, and repository integrity: `PASS`.
+- Consumer-repository migration: `NOT_STARTED_AND_OUT_OF_SCOPE`.
+- Closure evidence: `docs/dogfood/codex_user_skills_bootstrap_v1_real_installation_and_host_e2e_report.md`.
 
 ## Layer Status
 
@@ -45,7 +56,7 @@
 - Status: `stable`
 - `system-status-update` owns system-level status-first linked refresh and produces the concise status baseline for handoff.
 - `system-handoff` is the handoff receiver and handoff output boundary owner.
-- This refresh records the `2026-07-08` status baseline at current observed `origin/main` HEAD `014c007`, preserving phase consistency with the handoff document.
+- This refresh records the `2026-07-27` closure baseline at current observed `origin/main` HEAD `6707cb3`, preserving phase consistency with the handoff document.
 - Current-state SSOT remains the `docs/status/skill-hub-status.md` plus `docs/HANDOFF.md` pair unless a maintainer explicitly declares another current-state SSOT.
 
 ### Review Tooling Layer
@@ -61,7 +72,7 @@
 
 - System phase: `Phase 3 - Controlled System`.
 - Closeout state: P0 asset entrypoint cleanup, DeepSeek review configuration, and P1 examples coverage are merged and complete.
-- Current observed main HEAD after PR #21: `014c007`.
+- Current observed main HEAD after the latest governance documentation update: `6707cb3`.
 - Completed P1 rounds:
   - P1-A: `chatgpt-handoff-pilot` invocation examples, PR #15, commit `8a734ff`.
   - P1-B: `project-takeover` invocation examples, PR #16, commit `ae97ab4`.
