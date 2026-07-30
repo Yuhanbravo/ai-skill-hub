@@ -35,6 +35,7 @@ This file is the single source of truth for project handoff.
 - 2026-06-11: Refreshed system status first (`docs/status/skill-hub-status.md`, Updated at `2026-06-11`) and then applied the P1 examples coverage closeout. This records P1-A / PR #15 at `8a734ff`, P1-B / PR #16 at `ae97ab4`, and P1-C / PR #17 at `fd6cf10` as merged, closes P1 examples coverage, and keeps P2 as a separate future planning / task-package round rather than starting it here.
 - 2026-07-08: Refreshed system status first (`docs/status/skill-hub-status.md`, Updated at `2026-07-08`) and then refreshed the P1 closeout handoff against current main. This records current observed `origin/main` HEAD `014c007` after PR #21, preserves the P1-A / P1-B / P1-C closeout facts, and adds brief later current-main facts for PR #19, PR #20, and PR #21 without entering F1 adapter/index work.
 - 2026-07-27: Recorded the docs-only Stage D closure for Codex User Skills Bootstrap V1 after refreshing the real-host installation Check. The implementation baseline is merged and published, real installation is current, CLI/App discovery E2E passed, idempotency and `.system` protection were verified, and consumer-repository migration remains out of scope.
+- 2026-07-27: Recorded the transition from the closed Codex User Skills Bootstrap V1 to the consumer-repository adoption pilot. `PJT_Derivative_Data` is the first pilot and is authorized only for read-only adoption audit and governance planning; implementation and broader rollout remain unauthorized. This also records the actual user-level Bundle V1 boundary and that `system-handoff` is not included in Bundle V1.
 
 ## Current Status
 
@@ -42,9 +43,47 @@ This file is the single source of truth for project handoff.
 
 The repository continues to operate as a layered AI capability system rather than a normal business-project codebase. `skills/` remains the stable canonical source, `.agents/skills/` and `.github/skills/` remain derivative discoverability surfaces, governance and tooling remain read-only / local-first, and `docs/HANDOFF.md` plus `docs/status/skill-hub-status.md` remain the active-source coordination documents for system state.
 
-As of the `2026-07-08` status baseline, current observed `origin/main` HEAD is `014c007` after PR #21. P0 asset entrypoint cleanup is closed, DeepSeek review configuration closeout is closed, and P1 examples coverage is closed. The current state is P1 closeout complete; the repository should not continue adding scattered P1 examples in this line.
+As of the `2026-07-27` status baseline, current observed `origin/main` HEAD is `3919677`. P0 asset entrypoint cleanup is closed, DeepSeek review configuration closeout is closed, and P1 examples coverage is closed. The current system phase remains `Phase 3 - Controlled System`; the current program stage is recorded below.
 
 As of `2026-07-27`, Codex User Skills Bootstrap V1 is closed through a real-installation and host E2E evidence pass. The implementation baseline is `f57ae3e9d89fb3432fbb8b7c572042b69f6fcc58`; the installed `workflow-bootstrap`, `chatgpt-handoff-pilot`, and `_protocol` entries are current and fingerprint-consistent; CLI and Codex App discovery passed; and the closure evidence is recorded in `docs/dogfood/codex_user_skills_bootstrap_v1_real_installation_and_host_e2e_report.md`. This is a local installation closure, not consumer-repository migration, distribution readiness, or authorization to merge the docs branch to `main`.
+
+Current program stage is `CONSUMER_REPOSITORY_ADOPTION_PILOT`. The first consumer adoption pilot is `PJT_Derivative_Data`, targeting `D:\dev\Derivative_Data`. The current authorized stage is `READ_ONLY_ADOPTION_AUDIT_AND_GOVERNANCE_PLANNING`; pilot implementation is `NOT_AUTHORIZED`, and rollout to other consumer repositories is `NOT_AUTHORIZED`. The pilot is authorized but not completed, and the consumer adoption pattern remains unvalidated.
+
+User-level Bundle V1 currently consists only of `workflow-bootstrap`, `chatgpt-handoff-pilot`, and `_protocol`. The hub still contains system-wrapper capabilities such as `system-handoff`, `system-status-update`, and `system-takeover`, but there is no evidence that they were installed as user-level Bundle V1 skills; `system-handoff` is `NOT_INCLUDED_IN_BUNDLE_V1`. Any user-level bundle adjustment is separate future governance and is not part of the `Derivative_Data` pilot.
+
+```text
+Current_Program_Stage=
+CONSUMER_REPOSITORY_ADOPTION_PILOT
+
+Bootstrap_V1=
+FULLY_CLOSED
+
+First_Consumer_Adoption_Pilot=
+PJT_Derivative_Data
+
+Pilot_Repository=
+D:\dev\Derivative_Data
+
+Pilot_Current_Status=
+AUTHORIZED_FOR_READ_ONLY_ADOPTION_AUDIT_AND_GOVERNANCE_PLANNING
+
+Pilot_Implementation=
+NOT_AUTHORIZED
+
+Other_Consumer_Repository_Rollout=
+NOT_AUTHORIZED
+
+User_Installed_Bundle_V1=
+workflow-bootstrap
+chatgpt-handoff-pilot
+_protocol
+
+System_Wrapper_User_Installation=
+NOT_INCLUDED_IN_BUNDLE_V1
+
+System_Handoff_User_Bundle_State=
+NOT_INCLUDED_IN_BUNDLE_V1
+```
 
 P1 examples coverage completed in three merged rounds: P1-A expanded `chatgpt-handoff-pilot` invocation examples in PR #15 at `8a734ff`; P1-B expanded `project-takeover` invocation examples in PR #16 at `ae97ab4` and tightened limited-scope / scoped-reuse wording before merge; P1-C expanded `skill-governance` invocation examples in PR #17 at `fd6cf10`, including the follow-up Skill Refactor boundary tightening after Codex review. P1-C also clarified the batch evaluator as read-only sequential evaluation, not batch rewrite.
 
@@ -82,6 +121,7 @@ The P1 closeout records PR #15, PR #16, and PR #17 as merged evidence for P1 exa
 - `system-status-update` and `system-handoff` coordination must remain minimal: refresh status first, then merge handoff; keep a `14`-day freshness gate and phase consistency check, but do not introduce auto-trigger orchestration.
 - In distributed business-project contexts, `.codex/skills/` is the runtime SSOT for local skill content. Project-local adapters must point to `.codex/skills/`, not back to hub `skills/` paths.
 - `workflow-bootstrap` Phase 0-3 baseline guidance must remain canonical guidance only. It must not be presented as completed Phase 4 multi-project pilot work, distribution readiness, or authorization to expand the project-side file family by default.
+- The `PJT_Derivative_Data` consumer adoption pilot is limited to read-only adoption audit and governance planning. No pilot implementation, user-level Bundle V1 change, Consumer Adoption Pattern V1 freeze, or rollout to another consumer repository is authorized.
 - `workflow-bootstrap` owns workflow shell, role split, runtime profile, review tier guidance, and runtime pack manifest guidance. `chatgpt-handoff-pilot` owns task package, bounded execution, and execution report protocols.
 - `workflow-bootstrap` is the project-level orchestration owner for dual-refresh and GitHub PR bootstrap prompting. It must not absorb `system-status-update`, `system-handoff`, or `chatgpt-handoff-pilot` protocol ownership.
 - `system-status-update` owns system-level status-first linked refresh and the concise status baseline used by handoff.
@@ -167,11 +207,11 @@ The P1 closeout records PR #15, PR #16, and PR #17 as merged evidence for P1 exa
 - No broader project-side runtime-pack family rollout beyond thin-entry guidance; `.github/instructions/*.instructions.md` and `.github/agents/*.agent.md` remain unimplemented and out of default scope.
 - No distinct project-local canonical payload artifact exists yet in the current repo; the controlled placeholder remains intentionally unresolved until a maintainer-confirmed artifact actually appears.
 - No complete validation yet across multiple project types; Round 1 covered Git-first and non-git / low-git candidates as read-only evidence, but a follow-up should specifically close the Git-first evidence gap before any broader portability claim.
-- No rollout-readiness, distribution-readiness, or adoption gate has been defined from the Phase 0-3 baseline; that decision remains future governance work rather than an automatic consequence of the baseline.
+- The consumer adoption pilot is authorized only for read-only audit and governance planning; no implementation, broader rollout, or frozen Consumer Adoption Pattern V1 exists yet.
 - No refresh of `skills_index.json` in this workflow-bootstrap pass; that deferral is intentional because the current generation chain would also rewrite `.agents/skills/*.md` flat summaries and widen the bounded-execution scope.
 - No expansion of local validation and check tooling into an automated distribution, rollout, or execution framework; the repository still treats those tools as repeatable local support surfaces rather than a stronger controller layer.
 - No `tool_adapters/`, validators / automation / CI, `.github/instructions/`, `.github/agents/`, Phase 5 tool adapter candidates, or Phase 6 validator / automation preflight work has started.
-- No distribution / rollout / adoption step has started for the future project-side runtime pack; the current refresh is only baseline curation after Phase 0-3.
+- No consumer-repository implementation or broader distribution / rollout has started; the current `Derivative_Data` pilot remains limited to read-only adoption audit and governance planning.
 - No automation, validators, CI, router / pipeline integration, broader scoring rollout, or auto-remediation was added for the shared assessment output protocol.
 - No mandatory `maturity_score` policy exists for status / handoff skills; scoring remains optional / where applicable.
 - No validator / CI / automation escalation is justified by the P1.5 dogfood alone; cross-executor consistency should be observed through future real outputs first.
@@ -185,7 +225,9 @@ These gaps are intentional to keep the system legible while distribution and gov
 
 ## Next Phase Direction
 
-The next workflow-bootstrap direction is Phase 4 Round 2 planning focused on the Git-first evidence gap from Round 1. It should use a separately reviewed task package or explicit maintainer-provided Git evidence, not direct implementation.
+The immediate program direction is the `CONSUMER_REPOSITORY_ADOPTION_PILOT`, beginning with the `PJT_Derivative_Data` read-only adoption audit and governance planning. The expected output is a `CONSUMER_ADOPTION_DECISION` and, only if a change is required, a bounded task package. Pilot implementation, broader rollout, and a frozen Consumer Adoption Pattern V1 remain unauthorized or pending validation.
+
+The workflow-bootstrap line's separate next direction remains Phase 4 Round 2 planning focused on the Git-first evidence gap from Round 1. It should use a separately reviewed task package or explicit maintainer-provided Git evidence, not direct implementation.
 
 Round 1 findings should remain validation evidence only. Any future feedback loop must return only generalized guidance to canonical assets and must not import project-specific paths, business facts, secrets, or environment commands into the hub.
 
@@ -201,14 +243,14 @@ Documentation maintenance should treat HANDOFF/status as the current-state SSOT 
 
 Documentation follow-up should prioritize dogfooding and maintenance discipline for the new catalog/registry indexes (for example, using them during the next real skill change and observing upkeep friction) before considering candidate-promotion protocol work, validators, or automation.
 
-The immediate direction after P1 closeout is not to expand P1. Any P2 work should begin as a separate planning / backlog-selection round with its own reviewed task package, starting from read-only inventory and explicit scope boundaries.
+The separate workflow-bootstrap line remains closed after P1 and must not expand P1; any P2 work should begin as a separate planning / backlog-selection round with its own reviewed task package, starting from read-only inventory and explicit scope boundaries. The current program direction is the read-only Consumer Adoption Pilot recorded above.
 
 ## Recommended Next Actions
 
-1. Treat P1 examples coverage as closed.
-2. Start P2 only through a separate planning / task-package round.
-3. Keep the first P2 step read-only until backlog selection and scope are explicit.
-4. Preserve closeout boundaries: no workflow, `.agents`, tools, registry/index, prompt body, protocol, example, template, or broad skill restructuring changes in this closeout line.
+1. Execute the authorized read-only adoption audit and governance planning for `PJT_Derivative_Data`.
+2. Return a `CONSUMER_ADOPTION_DECISION` and create a bounded task package only if a change is required.
+3. Keep pilot implementation and other consumer-repository rollout unauthorized until separately approved.
+4. Keep Consumer Adoption Pattern V1 unfrozen and preserve the actual Bundle V1 installation boundary.
 
 ## System Takeover Snapshot (2026-04-02)
 
