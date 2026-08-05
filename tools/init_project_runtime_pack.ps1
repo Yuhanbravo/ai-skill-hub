@@ -248,7 +248,7 @@ function Get-Sha256Bytes {
 }
 
 function Get-Sha256Text {
-    param([Parameter(Mandatory = $true)][string]$Text)
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text)
     return Get-Sha256Bytes -Bytes ($script:Utf8NoBom.GetBytes($Text))
 }
 
@@ -374,13 +374,22 @@ function ConvertTo-SafeRelativePosixPath {
         Throw-PackError -Condition $Condition -Message "$Label contains an unsafe segment."
     }
     foreach ($segment in $segments) {
+        if ($segment.IndexOf(':') -ge 0) {
+            Throw-PackError -Condition $Condition -Message "$Label contains a colon (drive or alternate data stream) segment."
+        }
+        if ([string]::Equals($segment, '.git', [System.StringComparison]::OrdinalIgnoreCase)) {
+            Throw-PackError -Condition $Condition -Message "$Label cannot contain a .git segment."
+        }
+        if ($segment.EndsWith('.')) {
+            Throw-PackError -Condition $Condition -Message "$Label contains a segment with a trailing dot."
+        }
+        if ($segment.EndsWith(' ')) {
+            Throw-PackError -Condition $Condition -Message "$Label contains a segment with a trailing space."
+        }
         $base = ($segment -split '\.')[0]
         if ($script:ReservedDeviceNames -contains $base.ToUpperInvariant()) {
             Throw-PackError -Condition $Condition -Message "$Label contains a reserved device name."
         }
-    }
-    if ([string]::Equals($segments[0], '.git', [System.StringComparison]::OrdinalIgnoreCase)) {
-        Throw-PackError -Condition $Condition -Message "$Label cannot enter the Git directory."
     }
     return $normalized
 }
@@ -507,7 +516,7 @@ function Read-ExistingTextFile {
 
 function Get-ManagedBlockInfo {
     param(
-        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text,
         [Parameter(Mandatory = $true)][string]$Label
     )
     $endsWithLf = $Text.EndsWith("`n")
@@ -577,6 +586,38 @@ function ConvertTo-HostNewline {
 # Atomic file writes
 # ---------------------------------------------------------------------------
 
+function Register-CreatedDirectories {
+    # Records directories that this transaction is about to create (deepest
+    # first input: the directory that must exist). Only directories that do
+    # not exist yet and that sit strictly inside the project root are tracked;
+    # pre-existing directories (empty or not) are never recorded and therefore
+    # never removed by rollback.
+    param([Parameter(Mandatory = $true)][string]$TargetDir)
+    if ($null -eq $script:Ctx) {
+        return
+    }
+    $chain = New-Object 'System.Collections.Generic.List[string]'
+    $cursor = $TargetDir
+    while (-not [string]::IsNullOrWhiteSpace($cursor)) {
+        if (Test-PathEqual -Left $cursor -Right $script:Ctx.ProjectRoot) {
+            break
+        }
+        if (-not (Test-PathInside -Candidate $cursor -Parent $script:Ctx.ProjectRoot)) {
+            break
+        }
+        if (Test-Path -LiteralPath $cursor) {
+            break
+        }
+        $chain.Add($cursor)
+        $cursor = Split-Path -Path $cursor -Parent
+    }
+    foreach ($dir in $chain) {
+        if (-not $script:Ctx.CreatedDirectories.Contains($dir)) {
+            $script:Ctx.CreatedDirectories.Add($dir)
+        }
+    }
+}
+
 function Write-FileAtomic {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -584,6 +625,7 @@ function Write-FileAtomic {
     )
     $parent = Split-Path -Path $Path -Parent
     if (-not (Test-Path -LiteralPath $parent -PathType Container)) {
+        Register-CreatedDirectories -TargetDir $parent
         New-Item -ItemType Directory -Path $parent -Force | Out-Null
     }
     $tempPath = Join-Path $parent ('.runtime-pack-' + [guid]::NewGuid().ToString('N') + '.tmp')
@@ -1046,6 +1088,18 @@ function Get-FailAt {
     return [System.Environment]::GetEnvironmentVariable('AI_SKILL_HUB_RUNTIME_PACK_TEST_FAIL_AT')
 }
 
+function Get-TestTouchRealIndex {
+    # Test-only: when set to '1', a deterministic concurrent real-index change
+    # is simulated inside CommitReady just before the pre-swap hash check.
+    return [System.Environment]::GetEnvironmentVariable('AI_SKILL_HUB_RUNTIME_PACK_TEST_TOUCH_REAL_INDEX')
+}
+
+function Get-TestRollbackSkip {
+    # Test-only: when set, rollback deliberately skips one cleanup step so that
+    # rollback verification can be proven to detect the residue.
+    return [System.Environment]::GetEnvironmentVariable('AI_SKILL_HUB_RUNTIME_PACK_TEST_ROLLBACK_SKIP')
+}
+
 function Assert-FailAt {
     param([Parameter(Mandatory = $true)][string]$Point)
     $injected = Get-FailAt
@@ -1220,20 +1274,21 @@ function Invoke-Preflight {
         SectionName = ''
         SectionUrl = ''
         ConfigSectionExisted = $false
+        ConfigSectionPreText = ''
         ModuleGitDirExisted = $false
         HubPathExistedPre = $false
+        HubPathPreState = 'absent'
         GitmodulesExistedPre = $false
         GitmodulesPreBytes = $null
         HumanFileBackups = @{}
         CreatedPaths = New-Object 'System.Collections.Generic.List[string]'
+        CreatedDirectories = New-Object 'System.Collections.Generic.List[string]'
         Plan = New-Object 'System.Collections.Generic.List[object]'
         PlannedStageSet = New-Object 'System.Collections.Generic.List[string]'
         JournalRoot = ''
         AlternateIndexPath = ''
         IndexSwapped = $false
         HubPathCreated = $false
-        ModuleGitDirCreated = $false
-        ConfigSectionCreated = $false
         MutationStarted = $false
     }
     $script:Ctx = $ctx
@@ -1318,6 +1373,9 @@ function Invoke-Preflight {
     else {
         $ctx.HubPathNorm = ConvertTo-SafeRelativePosixPath -PathValue $HubPath -Condition 'PATH_SAFETY_VIOLATION' -Label 'HubPath'
         $ctx.HubAbsPath = Join-Path $projectRoot ($ctx.HubPathNorm.Replace('/', '\'))
+        if (-not (Test-PathInside -Candidate $ctx.HubAbsPath -Parent $projectRoot)) {
+            Throw-PackError -Condition 'PATH_SAFETY_VIOLATION' -Message 'HubPath escapes the project root after normalization.'
+        }
         Assert-NoReparseAncestors -PathValue $ctx.HubAbsPath -StopAt $projectRoot
         if ($script:BoundParams.ContainsKey('HubUrl')) {
             $ctx.HubUrlNorm = ConvertTo-NormalizedHubUrl -Url $HubUrl -Condition 'REF_INVALID'
@@ -1465,11 +1523,24 @@ function Invoke-Preflight {
         if ($matchingNames.Count -eq 0 -and -not [string]::IsNullOrEmpty($ctx.GitlinkCommit)) {
             Throw-PackError -Condition 'HUB_PATH_CONFLICT' -Message 'The hub path is occupied by an unregistered nested repository (gitlink without .gitmodules registration).'
         }
-        $configCheck = Invoke-Git -Arguments @('-C', $projectRoot, 'config', '--get', "submodule.$($script:SubmoduleName).url")
-        $ctx.ConfigSectionExisted = ($configCheck.ExitCode -eq 0)
+        $configCheck = Invoke-Git -Arguments @('-C', $projectRoot, 'config', '--get-regexp', "^submodule\.$($script:SubmoduleName)\.")
+        $ctx.ConfigSectionExisted = ($configCheck.ExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($configCheck.StdOut))
+        $ctx.ConfigSectionPreText = ''
+        if ($ctx.ConfigSectionExisted) {
+            $ctx.ConfigSectionPreText = $configCheck.StdOut
+        }
         $ctx.ModuleGitDirExisted = Test-Path -LiteralPath (Join-Path $ctx.GitDir "modules\$($script:SubmoduleName)") -PathType Container
         $hubItem = Get-Item -LiteralPath $ctx.HubAbsPath -Force -ErrorAction SilentlyContinue
         $ctx.HubPathExistedPre = ($null -ne $hubItem)
+        if ($null -ne $hubItem) {
+            if (-not $hubItem.PSIsContainer) {
+                $ctx.HubPathPreState = 'file'
+            }
+            else {
+                $preChildren = @(Get-ChildItem -LiteralPath $ctx.HubAbsPath -Force -ErrorAction SilentlyContinue)
+                $ctx.HubPathPreState = if ($preChildren.Count -eq 0) { 'empty' } else { 'populated' }
+            }
+        }
         if ($null -ne $hubItem -and (Test-IsReparsePoint -LiteralPath $ctx.HubAbsPath)) {
             Throw-PackError -Condition 'PATH_SAFETY_VIOLATION' -Message 'The hub path is a reparse point.'
         }
@@ -1639,10 +1710,13 @@ function Write-JournalFile {
         index_pre_hash = $script:Ctx.IndexPreHash
         gitmodules_pre_existed = $script:Ctx.GitmodulesExistedPre
         hub_path_existed_pre = $script:Ctx.HubPathExistedPre
+        hub_path_pre_state = $script:Ctx.HubPathPreState
         module_gitdir_existed_pre = $script:Ctx.ModuleGitDirExisted
         config_section_existed_pre = $script:Ctx.ConfigSectionExisted
+        config_section_pre_text = $script:Ctx.ConfigSectionPreText
         submodule_action = $script:Ctx.SubmoduleAction
         created_paths = @($script:Ctx.CreatedPaths)
+        created_directories = @($script:Ctx.CreatedDirectories)
         backed_up_files = @($script:Ctx.HumanFileBackups.Keys)
     }
     $json = $journal | ConvertTo-Json -Depth 4
@@ -1654,24 +1728,40 @@ function Write-JournalFile {
 
 function Invoke-SubmoduleMutation {
     $ctx = $script:Ctx
+    # Seed the alternate transaction index from the exact pre-state real index
+    # bytes. Every mutating Git command in this phase either avoids the
+    # superproject index entirely (clone / checkout / config) or writes only to
+    # this alternate index (pathspec add). The real index must stay untouched
+    # until CommitReady performs the atomic swap.
+    if ($ctx.IndexPreExisted) {
+        [System.IO.File]::WriteAllBytes($ctx.AlternateIndexPath, $ctx.IndexPreBytes)
+    }
     if ($HubMode -ne 'Submodule') {
-        # ExternalPath: read-only validation already completed in Plan. Seed the
-        # alternate index from the real index so CommitReady can stage adapters.
-        if (Test-Path -LiteralPath $ctx.RealIndexPath -PathType Leaf) {
-            [System.IO.File]::WriteAllBytes($ctx.AlternateIndexPath, [System.IO.File]::ReadAllBytes($ctx.RealIndexPath))
-        }
+        # ExternalPath: read-only validation already completed in Plan.
         return
     }
     if ($ctx.SubmoduleAction -eq 'add') {
-        $add = Invoke-Git -Arguments @(
-            '-C', $ctx.ProjectRoot,
-            '-c', 'protocol.file.allow=always',
-            'submodule', 'add', '--name', $script:SubmoduleName, '--',
-            $ctx.HubUrlNorm, $ctx.HubPathNorm
-        )
-        if ($add.ExitCode -ne 0) {
-            Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'git submodule add failed.'
+        $moduleGitDir = Join-Path $ctx.GitDir ('modules\' + $script:SubmoduleName)
+        $modulesParent = Join-Path $ctx.GitDir 'modules'
+        if (-not (Test-Path -LiteralPath $modulesParent -PathType Container)) {
+            New-Item -ItemType Directory -Path $modulesParent -Force | Out-Null
         }
+        # Track only the hub path ancestors; the hub directory itself is
+        # removed recursively by rollback (HubPathCreated).
+        Register-CreatedDirectories -TargetDir (Split-Path -Path $ctx.HubAbsPath -Parent)
+        # 1. Clone the hub directly into the standard submodule layout
+        #    (worktree gitfile -> .git/modules/<name>). No superproject index
+        #    is involved, so GIT_INDEX_FILE cannot leak into child processes.
+        $clone = Invoke-Git -Arguments @(
+            '-c', 'protocol.file.allow=always',
+            'clone', '--separate-git-dir', $moduleGitDir, '--',
+            $ctx.HubUrlNorm, $ctx.HubAbsPath
+        )
+        if ($clone.ExitCode -ne 0) {
+            Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'The hub repository could not be cloned into the submodule layout.'
+        }
+        Assert-FailAt -Point 'AfterModuleGitDirCreated'
+        # 2. Materialize the exact resolved commit inside the submodule.
         $catFile = Invoke-Git -Arguments @('-C', $ctx.HubAbsPath, 'cat-file', '-e', "$($ctx.ResolvedCommit)^{commit}")
         if ($catFile.ExitCode -ne 0) {
             $fetch = Invoke-Git -Arguments @('-C', $ctx.HubAbsPath, '-c', 'protocol.file.allow=always', 'fetch', 'origin', $ctx.ResolvedCommit)
@@ -1683,8 +1773,68 @@ function Invoke-SubmoduleMutation {
         if ($checkout.ExitCode -ne 0) {
             Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'The submodule could not be checked out at the resolved commit.'
         }
+        # 3. Register the submodule in .gitmodules (worktree file, append-safe)
+        #    and in the specific .git/config section.
+        $gitmodulesPath = Join-Path $ctx.ProjectRoot '.gitmodules'
+        $gmPath = Invoke-Git -Arguments @('-C', $ctx.ProjectRoot, 'config', '-f', $gitmodulesPath, "submodule.$($script:SubmoduleName).path", $ctx.HubPathNorm)
+        if ($gmPath.ExitCode -ne 0) {
+            Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'The submodule path could not be registered in .gitmodules.'
+        }
+        $gmUrl = Invoke-Git -Arguments @('-C', $ctx.ProjectRoot, 'config', '-f', $gitmodulesPath, "submodule.$($script:SubmoduleName).url", $ctx.HubUrlNorm)
+        if ($gmUrl.ExitCode -ne 0) {
+            Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'The submodule URL could not be registered in .gitmodules.'
+        }
+        $cfgUrl = Invoke-Git -Arguments @('-C', $ctx.ProjectRoot, 'config', "submodule.$($script:SubmoduleName).url", $ctx.HubUrlNorm)
+        if ($cfgUrl.ExitCode -ne 0) {
+            Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'The submodule URL could not be registered in the Git config.'
+        }
+        Assert-FailAt -Point 'AfterSubmoduleConfigCreated'
+        # 4. Normalize the worktree gitfile to a relative link and set
+        #    core.worktree in the module gitdir (the same layout
+        #    `git submodule add` produces). The clone-created gitfile may be
+        #    read-only on Windows; clear the attribute before rewriting.
+        $depth = @($ctx.HubPathNorm -split '/').Count
+        $relativeGitDir = ((@('..') * $depth) -join '/') + '/.git/modules/' + $script:SubmoduleName
+        $gitfilePath = Join-Path $ctx.HubAbsPath '.git'
+        $gitfileItem = Get-Item -LiteralPath $gitfilePath -Force -ErrorAction SilentlyContinue
+        if ($null -ne $gitfileItem) {
+            $gitfileItem.Attributes = [System.IO.FileAttributes]::Archive
+        }
+        [System.IO.File]::WriteAllBytes(
+            $gitfilePath,
+            $script:Utf8NoBom.GetBytes("gitdir: $relativeGitDir`n")
+        )
+        $relativeWorktree = '../../../' + $ctx.HubPathNorm
+        $worktreeCfg = Invoke-Git -Arguments @('--git-dir', $moduleGitDir, 'config', 'core.worktree', $relativeWorktree)
+        if ($worktreeCfg.ExitCode -ne 0) {
+            Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'The submodule worktree configuration could not be written.'
+        }
+        $headCheck = Invoke-Git -Arguments @('-C', $ctx.HubAbsPath, 'rev-parse', 'HEAD')
+        if ($headCheck.ExitCode -ne 0 -or (Get-GitSingleLine -Result $headCheck).ToLowerInvariant() -cne $ctx.ResolvedCommit) {
+            Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'The submodule gitfile/worktree wiring could not be verified.'
+        }
+        # 5. Stage .gitmodules and the gitlink into the ALTERNATE index only.
+        #    A plain pathspec add spawns no child Git process, so
+        #    GIT_INDEX_FILE cannot leak here.
+        $altEnv = @{ GIT_INDEX_FILE = $ctx.AlternateIndexPath }
+        $restage = Invoke-Git -Arguments @(
+            '-C', $ctx.ProjectRoot,
+            '-c', 'advice.addEmbeddedRepo=false',
+            'add', '--', '.gitmodules', $ctx.HubPathNorm
+        ) -ExtraEnvironment $altEnv
+        if ($restage.ExitCode -ne 0) {
+            Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'The gitlink could not be staged at the resolved commit.'
+        }
+        $altGitlink = Get-GitlinkCommit -RelPath $ctx.HubPathNorm -Env $altEnv
+        if ($altGitlink -cne $ctx.ResolvedCommit) {
+            Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'The alternate index gitlink does not equal the resolved commit.'
+        }
+        Assert-FailAt -Point 'DuringSubmoduleMutation'
     }
     elseif ($ctx.SubmoduleAction -eq 'materialize') {
+        # submodule update --init does not write the superproject index
+        # (verified on the supported Git floor); it must run without
+        # GIT_INDEX_FILE so the variable cannot leak into clone children.
         $update = Invoke-Git -Arguments @(
             '-C', $ctx.ProjectRoot,
             '-c', 'protocol.file.allow=always',
@@ -1698,25 +1848,10 @@ function Invoke-SubmoduleMutation {
             Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'The materialized submodule HEAD does not equal the committed gitlink.'
         }
     }
-    # Snapshot the transaction index: absorb any gitlink/.gitmodules staging that
-    # submodule commands wrote to the real index, then restore the exact pre-state
-    # real index bytes. GIT_INDEX_FILE is deliberately NOT set around submodule
-    # commands because it would leak into recursive child Git processes (clone /
-    # checkout of the submodule) and corrupt the alternate index.
-    [System.IO.File]::WriteAllBytes($ctx.AlternateIndexPath, [System.IO.File]::ReadAllBytes($ctx.RealIndexPath))
-    Write-RealIndexBytesAtomic -Bytes $ctx.IndexPreBytes
+    # Phase invariant: the real index must be byte-identical to its
+    # pre-transaction state at the end of SubmoduleMutation.
     if ((Get-RealIndexHash) -cne $ctx.IndexPreHash) {
-        Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'The real index could not be restored to its pre-transaction state.'
-    }
-    if ($ctx.SubmoduleAction -eq 'add') {
-        # Restage .gitmodules and the gitlink at the exact resolved commit into the
-        # alternate index (plain pathspec add: no submodule recursion, so
-        # GIT_INDEX_FILE cannot leak into a child Git process here).
-        $altEnv = @{ GIT_INDEX_FILE = $ctx.AlternateIndexPath }
-        $restage = Invoke-Git -Arguments @('-C', $ctx.ProjectRoot, 'add', '--', '.gitmodules', $ctx.HubPathNorm) -ExtraEnvironment $altEnv
-        if ($restage.ExitCode -ne 0) {
-            Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'The gitlink could not be staged at the resolved commit.'
-        }
+        Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'The real index changed during the submodule mutation phase.'
     }
 }
 
@@ -1832,9 +1967,16 @@ function Invoke-CommitReady {
     if (($expected -join "`0") -cne ($actual -join "`0")) {
         Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'The alternate index staged path set does not equal the planned set.'
     }
+    if ([string](Get-TestTouchRealIndex) -eq '1') {
+        # Test-only deterministic hook: simulate a concurrent actor rewriting
+        # the real index (read-tree rewrites it without stat cache) so the
+        # pre-swap concurrency check fires on every run without polling races.
+        Invoke-Git -Arguments @('-C', $ctx.ProjectRoot, 'read-tree', 'HEAD') | Out-Null
+    }
     if ((Get-RealIndexHash) -cne $ctx.IndexPreHash) {
         Throw-PackError -Condition 'CONCURRENT_STATE_CHANGE' -Message 'The real Git index changed during the transaction.'
     }
+    Assert-FailAt -Point 'BeforeIndexSwap'
     $alternateBytes = [System.IO.File]::ReadAllBytes($ctx.AlternateIndexPath)
     Write-RealIndexBytesAtomic -Bytes $alternateBytes
     $ctx.IndexSwapped = $true
@@ -1871,40 +2013,26 @@ function Invoke-FinalVerification {
     }
 }
 
-function Remove-EmptyCreatedDirectories {
-    param([Parameter(Mandatory = $true)][string]$StartDir)
-    $cursor = $StartDir
-    while (-not [string]::IsNullOrWhiteSpace($cursor)) {
-        if (Test-PathEqual -Left $cursor -Right $script:Ctx.ProjectRoot) {
-            break
-        }
-        if (-not (Test-PathInside -Candidate $cursor -Parent $script:Ctx.ProjectRoot)) {
-            break
-        }
-        if (-not (Test-Path -LiteralPath $cursor -PathType Container)) {
-            $cursor = Split-Path -Path $cursor -Parent
-            continue
-        }
-        $children = @(Get-ChildItem -LiteralPath $cursor -Force -ErrorAction SilentlyContinue)
-        if ($children.Count -gt 0) {
-            break
-        }
-        Remove-Item -LiteralPath $cursor -Force -ErrorAction SilentlyContinue
-        $cursor = Split-Path -Path $cursor -Parent
-    }
-}
-
 function Invoke-PackRollback {
     $ctx = $script:Ctx
     $verified = $true
     $failureNote = ''
+    $failures = New-Object 'System.Collections.Generic.List[string]'
+    # Test-only hook: deliberately skip one cleanup step so rollback
+    # verification can be proven to detect the residue.
+    $skip = [string](Get-TestRollbackSkip)
+    $moduleDir = Join-Path $ctx.GitDir "modules\$($script:SubmoduleName)"
+    $gitmodulesPath = Join-Path $ctx.ProjectRoot '.gitmodules'
     try {
         # Step 2: restore or clean index state.
         if ($ctx.IndexSwapped) {
             Write-RealIndexBytesAtomic -Bytes $ctx.IndexPreBytes
             if ((Get-RealIndexHash) -cne $ctx.IndexPreHash) {
                 $verified = $false
-                $failureNote = 'real index restore failed'
+                $failures.Add('real index restore failed')
+            }
+            if (-not [string]::IsNullOrEmpty($ctx.AlternateIndexPath) -and (Test-Path -LiteralPath $ctx.AlternateIndexPath -PathType Leaf)) {
+                Remove-Item -LiteralPath $ctx.AlternateIndexPath -Force -ErrorAction SilentlyContinue
             }
         }
         else {
@@ -1916,7 +2044,7 @@ function Invoke-PackRollback {
                 Write-RealIndexBytesAtomic -Bytes $ctx.IndexPreBytes
                 if ((Get-RealIndexHash) -cne $ctx.IndexPreHash) {
                     $verified = $false
-                    $failureNote = 'real index restore failed'
+                    $failures.Add('real index restore failed')
                 }
             }
         }
@@ -1929,82 +2057,191 @@ function Invoke-PackRollback {
             [System.IO.File]::WriteAllBytes($path, $backupBytes)
             if ((Get-Sha256File -Path $path) -cne (Get-Sha256Bytes -Bytes $backupBytes)) {
                 $verified = $false
-                $failureNote = 'human file restore failed'
+                $failures.Add('human file restore failed')
             }
         }
         foreach ($created in $ctx.CreatedPaths) {
             if ((Test-PathInside -Candidate $created -Parent $ctx.ProjectRoot) -and (Test-Path -LiteralPath $created -PathType Leaf)) {
                 Remove-Item -LiteralPath $created -Force -ErrorAction SilentlyContinue
-                Remove-EmptyCreatedDirectories -StartDir (Split-Path -Path $created -Parent)
             }
         }
         # Step 4: restore .gitmodules.
-        $gitmodulesPath = Join-Path $ctx.ProjectRoot '.gitmodules'
         if ($ctx.GitmodulesExistedPre) {
             [System.IO.File]::WriteAllBytes($gitmodulesPath, $ctx.GitmodulesPreBytes)
         }
         elseif (Test-Path -LiteralPath $gitmodulesPath -PathType Leaf) {
             Remove-Item -LiteralPath $gitmodulesPath -Force -ErrorAction SilentlyContinue
         }
-        # Step 5: remove submodule artifacts created by this transaction.
-        if ($ctx.HubPathCreated -and (Test-Path -LiteralPath $ctx.HubAbsPath)) {
-            if (Test-PathInside -Candidate $ctx.HubAbsPath -Parent $ctx.ProjectRoot) {
-                Remove-Item -LiteralPath $ctx.HubAbsPath -Recurse -Force -ErrorAction SilentlyContinue
-                Remove-EmptyCreatedDirectories -StartDir (Split-Path -Path $ctx.HubAbsPath -Parent)
+        # Step 5: submodule artifacts. Decisions compare the journaled
+        # pre-state with the re-probed CURRENT state, so residue created by a
+        # partially completed mutation is cleaned even when the mutation phase
+        # never returned.
+        if ($HubMode -eq 'Submodule') {
+            if ($ctx.HubPathCreated -and (Test-Path -LiteralPath $ctx.HubAbsPath)) {
+                if (Test-PathInside -Candidate $ctx.HubAbsPath -Parent $ctx.ProjectRoot) {
+                    Remove-Item -LiteralPath $ctx.HubAbsPath -Recurse -Force -ErrorAction SilentlyContinue
+                }
+                else {
+                    $verified = $false
+                    $failures.Add('hub path scope check failed')
+                }
             }
-            else {
+            elseif (($ctx.HubPathPreState -eq 'empty') -and (Test-Path -LiteralPath $ctx.HubAbsPath -PathType Container)) {
+                # The hub directory pre-existed empty; only content introduced
+                # by this transaction (e.g. a partial materialize) is removed.
+                $hubChildren = @(Get-ChildItem -LiteralPath $ctx.HubAbsPath -Force -ErrorAction SilentlyContinue)
+                if ($hubChildren.Count -gt 0) {
+                    if (Test-PathInside -Candidate $ctx.HubAbsPath -Parent $ctx.ProjectRoot) {
+                        Get-ChildItem -LiteralPath $ctx.HubAbsPath -Force -ErrorAction SilentlyContinue |
+                            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+                    }
+                    else {
+                        $verified = $false
+                        $failures.Add('hub path scope check failed')
+                    }
+                }
+            }
+            if ((-not $ctx.ModuleGitDirExisted) -and (Test-Path -LiteralPath $moduleDir) -and ($skip -cne 'module-gitdir')) {
+                if (Test-PathInside -Candidate $moduleDir -Parent (Join-Path $ctx.GitDir 'modules')) {
+                    Remove-Item -LiteralPath $moduleDir -Recurse -Force -ErrorAction SilentlyContinue
+                }
+                else {
+                    $verified = $false
+                    $failures.Add('module gitdir scope check failed')
+                }
+            }
+            if ($skip -cne 'config') {
+                $configNow = Invoke-Git -Arguments @('-C', $ctx.ProjectRoot, 'config', '--get-regexp', "^submodule\.$($script:SubmoduleName)\.")
+                $configNowText = ''
+                if ($configNow.ExitCode -eq 0) {
+                    $configNowText = $configNow.StdOut
+                }
+                if ($configNowText -cne $ctx.ConfigSectionPreText) {
+                    Invoke-Git -Arguments @('-C', $ctx.ProjectRoot, 'config', '--remove-section', "submodule.$($script:SubmoduleName)") -AllowNonZero | Out-Null
+                    if (-not [string]::IsNullOrEmpty($ctx.ConfigSectionPreText)) {
+                        foreach ($line in ($ctx.ConfigSectionPreText -split "`n")) {
+                            $trimmed = $line.TrimEnd("`r")
+                            if ([string]::IsNullOrWhiteSpace($trimmed)) {
+                                continue
+                            }
+                            $splitAt = $trimmed.IndexOf(' ')
+                            if ($splitAt -lt 1) {
+                                continue
+                            }
+                            $cfgName = $trimmed.Substring(0, $splitAt)
+                            $cfgValue = $trimmed.Substring($splitAt + 1)
+                            Invoke-Git -Arguments @('-C', $ctx.ProjectRoot, 'config', '--add', $cfgName, $cfgValue) -AllowNonZero | Out-Null
+                        }
+                    }
+                }
+            }
+        }
+        # Step 5b: remove only directories this transaction explicitly created,
+        # deepest first, and only while still empty. Pre-existing directories
+        # (empty or not) are never touched.
+        foreach ($dir in ($ctx.CreatedDirectories | Sort-Object { $_.Length } -Descending)) {
+            if (-not (Test-PathInside -Candidate $dir -Parent $ctx.ProjectRoot)) {
                 $verified = $false
-                $failureNote = 'hub path scope check failed'
+                $failures.Add('created directory scope check failed')
+                continue
             }
-        }
-        if ($ctx.ModuleGitDirCreated) {
-            $moduleDir = Join-Path $ctx.GitDir "modules\$($script:SubmoduleName)"
-            if ((Test-PathInside -Candidate $moduleDir -Parent (Join-Path $ctx.GitDir 'modules')) -and (Test-Path -LiteralPath $moduleDir)) {
-                Remove-Item -LiteralPath $moduleDir -Recurse -Force -ErrorAction SilentlyContinue
+            if (Test-Path -LiteralPath $dir -PathType Container) {
+                $dirChildren = @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue)
+                if ($dirChildren.Count -eq 0) {
+                    Remove-Item -LiteralPath $dir -Force -ErrorAction SilentlyContinue
+                }
+                else {
+                    $verified = $false
+                    $failures.Add("transaction-created directory is not empty at rollback: $dir")
+                }
             }
-        }
-        if ($ctx.ConfigSectionCreated) {
-            Invoke-Git -Arguments @('-C', $ctx.ProjectRoot, 'config', '--remove-section', "submodule.$($script:SubmoduleName)") -AllowNonZero | Out-Null
         }
         # Step 6: verify exact pre-state.
         $statusResult = Invoke-Git -Arguments @('-C', $ctx.ProjectRoot, 'status', '--porcelain=v2', '--untracked-files=all')
         $statusNow = $statusResult.StdOut.TrimEnd("`r", "`n")
         if ($statusNow -cne $ctx.StatusPre) {
             $verified = $false
-            $failureNote = 'worktree status differs from pre-state'
+            $failures.Add('worktree status differs from pre-state')
         }
         # The raw index byte hash is stat-cache sensitive (any legitimate Git
         # refresh rewrites it), so pre-state equality is verified on the staged
-        # entry set (mode/OID/stage/path), which is the mutation-relevant content.
+        # entry set (mode/OID/stage/path), which is the mutation-relevant
+        # content. Byte-hash equality is enforced immediately after every
+        # restore write above; here the entry set is authoritative.
         $entriesNow = (Invoke-Git -Arguments @('-C', $ctx.ProjectRoot, 'ls-files', '-s', '-z')).StdOut
         if ($entriesNow -cne $ctx.IndexEntriesPre) {
             $verified = $false
-            $failureNote = 'real index entries differ from pre-state'
+            $failures.Add('real index entries differ from pre-state')
+        }
+        if (-not [string]::IsNullOrEmpty($ctx.AlternateIndexPath) -and (Test-Path -LiteralPath $ctx.AlternateIndexPath -PathType Leaf)) {
+            $verified = $false
+            $failures.Add('alternate transaction index still present')
         }
         foreach ($path in $ctx.HumanFileBackups.Keys) {
             $backupBytes = [System.IO.File]::ReadAllBytes($ctx.HumanFileBackups[$path])
             if ((Get-Sha256File -Path $path) -cne (Get-Sha256Bytes -Bytes $backupBytes)) {
                 $verified = $false
-                $failureNote = 'human file hash differs from pre-state'
+                $failures.Add('human file hash differs from pre-state')
+            }
+        }
+        foreach ($created in $ctx.CreatedPaths) {
+            if (Test-Path -LiteralPath $created) {
+                $verified = $false
+                $failures.Add("transaction-created path still present: $created")
+            }
+        }
+        foreach ($dir in $ctx.CreatedDirectories) {
+            if (Test-Path -LiteralPath $dir) {
+                $verified = $false
+                $failures.Add("transaction-created directory still present: $dir")
             }
         }
         $gitmodulesNow = Test-Path -LiteralPath $gitmodulesPath -PathType Leaf
         if ($ctx.GitmodulesExistedPre) {
             if (-not $gitmodulesNow -or (Get-Sha256File -Path $gitmodulesPath) -cne (Get-Sha256Bytes -Bytes $ctx.GitmodulesPreBytes)) {
                 $verified = $false
-                $failureNote = '.gitmodules differs from pre-state'
+                $failures.Add('.gitmodules differs from pre-state')
             }
         }
         elseif ($gitmodulesNow) {
             $verified = $false
-            $failureNote = '.gitmodules was not restored to absent'
+            $failures.Add('.gitmodules was not restored to absent')
+        }
+        if ($HubMode -eq 'Submodule') {
+            $configVerify = Invoke-Git -Arguments @('-C', $ctx.ProjectRoot, 'config', '--get-regexp', "^submodule\.$($script:SubmoduleName)\.")
+            $configVerifyText = ''
+            if ($configVerify.ExitCode -eq 0) {
+                $configVerifyText = $configVerify.StdOut
+            }
+            if ($configVerifyText -cne $ctx.ConfigSectionPreText) {
+                $verified = $false
+                $failures.Add('submodule config section differs from pre-state')
+            }
+            $moduleDirNow = Test-Path -LiteralPath $moduleDir -PathType Container
+            if ($moduleDirNow -ne $ctx.ModuleGitDirExisted) {
+                $verified = $false
+                $failures.Add('submodule module gitdir state differs from pre-state')
+            }
+            $hubNow = Test-Path -LiteralPath $ctx.HubAbsPath
+            if ($hubNow -ne $ctx.HubPathExistedPre) {
+                $verified = $false
+                $failures.Add('hub worktree existence differs from pre-state')
+            }
+            elseif ($ctx.HubPathPreState -eq 'empty') {
+                $hubChildrenNow = @(Get-ChildItem -LiteralPath $ctx.HubAbsPath -Force -ErrorAction SilentlyContinue)
+                if ($hubChildrenNow.Count -gt 0) {
+                    $verified = $false
+                    $failures.Add('hub worktree was not restored to its empty pre-state')
+                }
+            }
         }
     }
     catch {
         $verified = $false
-        if ([string]::IsNullOrEmpty($failureNote)) {
-            $failureNote = 'rollback raised an error'
-        }
+        $failures.Add('rollback raised an error')
+    }
+    if ($failures.Count -gt 0) {
+        $failureNote = ($failures | Select-Object -Unique) -join '; '
     }
     return [pscustomobject]@{ Verified = $verified; Note = $failureNote }
 }
@@ -2066,9 +2303,6 @@ function Invoke-PackMain {
         Write-JournalFile
 
         Invoke-SubmoduleMutation
-        $ctx.ModuleGitDirCreated = (-not $ctx.ModuleGitDirExisted) -and (Test-Path -LiteralPath (Join-Path $ctx.GitDir "modules\$($script:SubmoduleName)") -PathType Container)
-        $configNow = Invoke-Git -Arguments @('-C', $ctx.ProjectRoot, 'config', '--get', "submodule.$($script:SubmoduleName).url")
-        $ctx.ConfigSectionCreated = (-not $ctx.ConfigSectionExisted) -and ($configNow.ExitCode -eq 0)
         Assert-FailAt -Point 'AfterSubmodule'
 
         if (-not $ctx.ManifestExists) {
@@ -2123,6 +2357,14 @@ function Invoke-PackFailure {
         $script:Result.Message = $message
         Write-PackResult
         return 2
+    }
+    # Refresh the journal so created paths/directories registered by partially
+    # completed phases are recorded before rollback (best effort evidence).
+    try {
+        Write-JournalFile
+    }
+    catch {
+        # Journal refresh is best effort; rollback proceeds from in-memory state.
     }
     $rollback = Invoke-PackRollback
     if ($rollback.Verified) {

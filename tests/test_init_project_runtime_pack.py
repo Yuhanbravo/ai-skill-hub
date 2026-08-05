@@ -6,8 +6,6 @@ import os
 import re
 import shutil
 import subprocess
-import threading
-import time
 from pathlib import Path
 
 import pytest
@@ -70,6 +68,8 @@ def isolated_env(home: Path) -> dict[str, str]:
     env["GIT_CONFIG_NOSYSTEM"] = "1"
     env["GIT_TERMINAL_PROMPT"] = "0"
     env.pop("AI_SKILL_HUB_RUNTIME_PACK_TEST_FAIL_AT", None)
+    env.pop("AI_SKILL_HUB_RUNTIME_PACK_TEST_TOUCH_REAL_INDEX", None)
+    env.pop("AI_SKILL_HUB_RUNTIME_PACK_TEST_ROLLBACK_SKIP", None)
     return env
 
 
@@ -201,6 +201,8 @@ def run_init(
     *args: str,
     home: Path | None = None,
     fail_at: str | None = None,
+    touch_real_index: bool = False,
+    rollback_skip: str | None = None,
     ceiling: Path | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], list[str], dict[str, str]]:
     env = isolated_env(home or (project.parent / "fake-home"))
@@ -210,6 +212,10 @@ def run_init(
     env["GIT_CEILING_DIRECTORIES"] = str(ceiling or project.parent)
     if fail_at:
         env["AI_SKILL_HUB_RUNTIME_PACK_TEST_FAIL_AT"] = fail_at
+    if touch_real_index:
+        env["AI_SKILL_HUB_RUNTIME_PACK_TEST_TOUCH_REAL_INDEX"] = "1"
+    if rollback_skip:
+        env["AI_SKILL_HUB_RUNTIME_PACK_TEST_ROLLBACK_SKIP"] = rollback_skip
     command = [
         PWSH,
         "-NoProfile",
@@ -1123,7 +1129,16 @@ def test_paths_with_spaces_and_chinese(tmp_path: Path, hub_remote: dict[str, obj
 
 @pytest.mark.parametrize(
     "injection",
-    ["AfterSubmodule", "AfterFirstAdapter", "AfterManifest", "AfterIndexSwap"],
+    [
+        "AfterModuleGitDirCreated",
+        "AfterSubmoduleConfigCreated",
+        "DuringSubmoduleMutation",
+        "AfterSubmodule",
+        "AfterFirstAdapter",
+        "AfterManifest",
+        "BeforeIndexSwap",
+        "AfterIndexSwap",
+    ],
 )
 def test_failure_injection_exact_rollback(
     project: Path, hub_remote: dict[str, object], injection: str
@@ -1278,76 +1293,49 @@ def test_external_path_requires_explicit_hubpath(project: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 26: concurrent real index change before swap
+# 26: concurrent real index change before swap (deterministic injection)
 # ---------------------------------------------------------------------------
 
 
 def test_concurrent_index_change_before_swap(
     project: Path, hub_remote: dict[str, object]
 ) -> None:
-    env = isolated_env(project.parent / "fake-home")
-    command = [
-        PWSH,
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        str(SCRIPT),
-        "-ProjectPath",
-        str(project),
-        "-HubUrl",
-        str(hub_remote["url"]),
-    ]
-    payload: dict[str, str] = {}
-    result: subprocess.CompletedProcess[str] | None = None
+    # The initializer's test-only hook rewrites the real index (read-tree
+    # without stat cache) at the exact pre-swap check inside CommitReady, so
+    # the concurrency detection fires deterministically on the first attempt:
+    # no polling thread, no retry loop, no timing dependence.
     before = snapshot_state(project)
-    for _attempt in range(3):
-        stop_event = threading.Event()
-
-        def hammer_index() -> None:
-            git_dir = project / ".git"
-            while not stop_event.is_set():
-                if any(git_dir.glob("runtime-pack-journal-*")):
-                    target = project / "README.md"
-                    try:
-                        stat = target.stat()
-                        os.utime(target, ns=(stat.st_atime_ns, stat.st_mtime_ns + 2_000_000_000))
-                        subprocess.run(
-                            [GIT, "-C", str(project), "update-index", "--refresh"],
-                            capture_output=True,
-                            check=False,
-                            env=env,
-                        )
-                    except OSError:
-                        pass
-                time.sleep(0.03)
-
-        worker = threading.Thread(target=hammer_index, daemon=True)
-        worker.start()
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-            env=env,
-        )
-        stop_event.set()
-        worker.join(timeout=5)
-        _, payload = parse_payload(result)
-        if payload.get("Decision") == "BLOCKED_CONCURRENT_STATE_CHANGE":
-            break
-    assert result is not None
-    keys, payload = parse_payload(result)
+    result, keys, payload = run_init(
+        project, "-HubUrl", str(hub_remote["url"]), touch_real_index=True
+    )
     assert_decision(result, keys, payload, "BLOCKED_CONCURRENT_STATE_CHANGE", 3)
     assert payload["Rollback_Status"] == "RESTORED"
     after = snapshot_state(project)
-    # The hammered stat refresh makes raw index bytes differ; the staged entry
-    # set and all content facets must equal the pre-state exactly.
-    assert before["index_entries"] == after["index_entries"]
-    for facet in ("worktree", "gitmodules", "config", "modules", "status"):
-        assert before[facet] == after[facet], facet
+    assert before == after
+    assert list((project / ".git").glob("runtime-pack-journal-*")) == []
+    # A subsequent run without injection must succeed from the restored state.
+    retry, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(retry, keys, payload, "PASS_PROJECT_RUNTIME_PACK_INITIALIZED", 0)
+
+
+def test_concurrent_index_test_is_deterministic(
+    tmp_path: Path, hub_remote: dict[str, object], session_env: dict[str, str]
+) -> None:
+    # Every attempt must produce the identical outcome from a confirmed-clean
+    # starting state; none may rely on a race window or leave residue behind.
+    for iteration in range(3):
+        fresh = tmp_path / f"concurrent-deterministic-{iteration}"
+        git_init(fresh, session_env)
+        write_text(fresh / "README.md", "# fixture\n")
+        commit_all(fresh, "fixture", session_env)
+        before = snapshot_state(fresh)
+        result, keys, payload = run_init(
+            fresh, "-HubUrl", str(hub_remote["url"]), touch_real_index=True
+        )
+        assert_decision(result, keys, payload, "BLOCKED_CONCURRENT_STATE_CHANGE", 3)
+        assert payload["Rollback_Status"] == "RESTORED"
+        assert snapshot_state(fresh) == before
+        assert list((fresh / ".git").glob("runtime-pack-journal-*")) == []
 
 
 # ---------------------------------------------------------------------------
@@ -1466,3 +1454,308 @@ def test_schema_validates_golden_manifests(
     corrupted = json.loads(json.dumps(submodule_manifest))
     corrupted["adapters"][0]["id"] = "other-id"
     assert validate_against_schema(corrupted, schema) != []
+
+
+# ---------------------------------------------------------------------------
+# Round 2R remediation: in-transaction submodule failure (F-01/F-05/F-07)
+# ---------------------------------------------------------------------------
+
+
+def test_failure_inside_submodule_mutation_restores_config_and_module_gitdir(
+    project: Path, hub_remote: dict[str, object]
+) -> None:
+    # The failure is injected inside Invoke-SubmoduleMutation, after Git has
+    # already created the submodule config section and .git/modules/ai-skill-hub.
+    before = snapshot_state(project)
+    result, keys, payload = run_init(
+        project, "-HubUrl", str(hub_remote["url"]), fail_at="AfterSubmoduleConfigCreated"
+    )
+    assert_decision(result, keys, payload, "FAILED_APPLY_ROLLED_BACK", 3)
+    assert payload["Rollback_Status"] == "RESTORED"
+    after = snapshot_state(project)
+    assert before == after
+    assert not (project / ".git" / "modules" / "ai-skill-hub").exists()
+    config = git(
+        project, "config", "--get-regexp", r"^submodule\.",
+        env=isolated_env(project.parent / "fake-home"), check=False,
+    )
+    assert config.returncode != 0
+    assert not (project / ".gitmodules").exists()
+    assert list((project / ".git").glob("runtime-pack-journal-*")) == []
+
+
+def test_failure_inside_submodule_mutation_clean_retry_succeeds(
+    project: Path, hub_remote: dict[str, object]
+) -> None:
+    # The historical failure mode left residue that made every later run return
+    # BLOCKED_SUBMODULE_CONFLICT; a verified rollback must allow a clean retry.
+    result, keys, payload = run_init(
+        project, "-HubUrl", str(hub_remote["url"]), fail_at="AfterModuleGitDirCreated"
+    )
+    assert_decision(result, keys, payload, "FAILED_APPLY_ROLLED_BACK", 3)
+    retry, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(retry, keys, payload, "PASS_PROJECT_RUNTIME_PACK_INITIALIZED", 0)
+    assert payload["Resolved_Commit"] == hub_remote["main_commit"]
+
+
+def test_rollback_verification_detects_config_residue(
+    project: Path, hub_remote: dict[str, object]
+) -> None:
+    # Test-only hook: rollback deliberately skips the config cleanup; the
+    # verification step must catch the residue and retain evidence (exit 4).
+    result, keys, payload = run_init(
+        project,
+        "-HubUrl", str(hub_remote["url"]),
+        fail_at="AfterSubmodule",
+        rollback_skip="config",
+    )
+    assert_decision(result, keys, payload, "BLOCKED_ROLLBACK_FAILURE", 4)
+    assert payload["Rollback_Status"] == "FAILED_EVIDENCE_RETAINED"
+    assert "config section" in payload["Message"]
+    journals = list((project / ".git").glob("runtime-pack-journal-*"))
+    assert len(journals) == 1
+    assert str(journals[0]) in payload["Message"]
+    residue = git(
+        project, "config", "--get-regexp", r"^submodule\.",
+        env=isolated_env(project.parent / "fake-home"), check=False,
+    )
+    assert residue.returncode == 0
+
+
+def test_rollback_verification_detects_module_gitdir_residue(
+    project: Path, hub_remote: dict[str, object]
+) -> None:
+    result, keys, payload = run_init(
+        project,
+        "-HubUrl", str(hub_remote["url"]),
+        fail_at="AfterSubmodule",
+        rollback_skip="module-gitdir",
+    )
+    assert_decision(result, keys, payload, "BLOCKED_ROLLBACK_FAILURE", 4)
+    assert payload["Rollback_Status"] == "FAILED_EVIDENCE_RETAINED"
+    assert "module gitdir" in payload["Message"]
+    journals = list((project / ".git").glob("runtime-pack-journal-*"))
+    assert len(journals) == 1
+    assert (project / ".git" / "modules" / "ai-skill-hub").is_dir()
+
+
+# ---------------------------------------------------------------------------
+# Round 2R remediation: real index isolation until CommitReady (F-06)
+# ---------------------------------------------------------------------------
+
+IN_TRANSACTION_INJECTION_POINTS = [
+    "AfterModuleGitDirCreated",
+    "AfterSubmoduleConfigCreated",
+    "DuringSubmoduleMutation",
+    "AfterSubmodule",
+    "AfterFirstAdapter",
+    "AfterManifest",
+    "BeforeIndexSwap",
+]
+
+
+@pytest.mark.parametrize("injection", IN_TRANSACTION_INJECTION_POINTS)
+def test_real_index_unchanged_until_commit_ready(
+    project: Path, hub_remote: dict[str, object], injection: str
+) -> None:
+    # At every point before the CommitReady swap the real index must remain
+    # byte-identical to its pre-transaction state and carry no gitlink; the
+    # rollback path must therefore never depend on restoring an early-mutated
+    # real index.
+    env_home = project.parent / "fake-home"
+    index_path = project / ".git" / "index"
+    pre_hash = sha256_file(index_path)
+    pre_entries = git(project, "ls-files", "-s", env=isolated_env(env_home)).stdout
+    assert "160000" not in pre_entries
+    result, keys, payload = run_init(
+        project, "-HubUrl", str(hub_remote["url"]), fail_at=injection
+    )
+    assert_decision(result, keys, payload, "FAILED_APPLY_ROLLED_BACK", 3)
+    assert sha256_file(index_path) == pre_hash
+    assert git(project, "ls-files", "-s", env=isolated_env(env_home)).stdout == pre_entries
+    assert staged_paths(project, env_home) == []
+    assert list((project / ".git").glob("runtime-pack-journal-*")) == []
+
+
+# ---------------------------------------------------------------------------
+# Round 2R remediation: empty entry files (F-03)
+# ---------------------------------------------------------------------------
+
+
+def assert_empty_entry_initialized(
+    project: Path, hub_remote: dict[str, object], relative: str
+) -> None:
+    target = project / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"")
+    commit_all(project, f"empty {relative}", isolated_env(project.parent / "fake-home"))
+    result, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(result, keys, payload, "PASS_PROJECT_RUNTIME_PACK_INITIALIZED", 0)
+    data = target.read_bytes()
+    assert data.startswith(b"<!-- ai-skill-hub:runtime-pack:start schema=v1 -->\n")
+    assert data.endswith(b"<!-- ai-skill-hub:runtime-pack:end -->\n")
+    assert b"\r" not in data
+    assert not data.startswith(b"\xef\xbb\xbf")
+    manifest = json.loads((project / ".ai" / "runtime-pack.json").read_text(encoding="utf-8"))
+    hashes = {adapter["path"]: adapter["content_sha256"] for adapter in manifest["adapters"]}
+    assert sha256_bytes(data) == hashes[relative]
+    rerun, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(rerun, keys, payload, "NO_CHANGE_PROJECT_RUNTIME_PACK_ALREADY_CURRENT", 0)
+    assert target.read_bytes() == data
+
+
+def test_empty_existing_agents_file(project: Path, hub_remote: dict[str, object]) -> None:
+    assert_empty_entry_initialized(project, hub_remote, "AGENTS.md")
+
+
+def test_empty_existing_claude_file(project: Path, hub_remote: dict[str, object]) -> None:
+    assert_empty_entry_initialized(project, hub_remote, "CLAUDE.md")
+
+
+def test_empty_existing_copilot_file(project: Path, hub_remote: dict[str, object]) -> None:
+    assert_empty_entry_initialized(project, hub_remote, ".github/copilot-instructions.md")
+
+
+# ---------------------------------------------------------------------------
+# Round 2R remediation: path safety preflight (F-04)
+# ---------------------------------------------------------------------------
+
+
+def assert_hub_path_rejected_preflight(
+    project: Path, hub_remote: dict[str, object], hub_path: str
+) -> None:
+    before = snapshot_state(project)
+    result, keys, payload = run_init(
+        project, "-HubUrl", str(hub_remote["url"]), "-HubPath", hub_path
+    )
+    assert_decision(result, keys, payload, "BLOCKED_PATH_SAFETY_VIOLATION", 2)
+    assert payload["Index_Change"] == "NO"
+    assert payload["Working_Tree_Change"] == "NO"
+    assert payload["Rollback_Status"] == "NOT_REQUIRED"
+    # The rejection must happen before any transaction starts.
+    assert snapshot_state(project) == before
+    assert list((project / ".git").glob("runtime-pack-journal-*")) == []
+
+
+def test_ads_hub_path_rejected_preflight(project: Path, hub_remote: dict[str, object]) -> None:
+    assert_hub_path_rejected_preflight(project, hub_remote, ".ai/hub:stream")
+
+
+def test_nested_dot_git_segment_rejected_preflight(
+    project: Path, hub_remote: dict[str, object]
+) -> None:
+    assert_hub_path_rejected_preflight(project, hub_remote, "sub/.git/hub")
+
+
+def test_trailing_dot_segment_rejected_preflight(
+    project: Path, hub_remote: dict[str, object]
+) -> None:
+    assert_hub_path_rejected_preflight(project, hub_remote, ".ai/ai-skill-hub.")
+
+
+def test_trailing_space_segment_rejected_preflight(
+    project: Path, hub_remote: dict[str, object]
+) -> None:
+    assert_hub_path_rejected_preflight(project, hub_remote, ".ai/ai-skill-hub ")
+
+
+# ---------------------------------------------------------------------------
+# Round 2R remediation: transaction-created directory tracking (F-09)
+# ---------------------------------------------------------------------------
+
+
+def test_preexisting_empty_directories_preserved_on_rollback(
+    project: Path, hub_remote: dict[str, object]
+) -> None:
+    preserved = (".github", ".agents", ".claude", ".ai", ".agents/skills", ".claude/skills")
+    for relative in preserved:
+        (project / relative).mkdir(parents=True, exist_ok=True)
+    result, keys, payload = run_init(
+        project, "-HubUrl", str(hub_remote["url"]), fail_at="AfterManifest"
+    )
+    assert_decision(result, keys, payload, "FAILED_APPLY_ROLLED_BACK", 3)
+    assert payload["Rollback_Status"] == "RESTORED"
+    for relative in preserved:
+        assert (project / relative).is_dir(), relative
+    assert list((project / ".ai").iterdir()) == []
+    assert list((project / ".agents" / "skills").iterdir()) == []
+    assert list((project / ".claude" / "skills").iterdir()) == []
+    assert list((project / ".github").iterdir()) == []
+
+
+# ---------------------------------------------------------------------------
+# Round 2R remediation: actual generated router resolution (F-08)
+# ---------------------------------------------------------------------------
+
+
+def test_generated_router_drives_real_canonical_resolution(
+    project: Path, hub_remote: dict[str, object]
+) -> None:
+    env_home = project.parent / "fake-home"
+    result, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(result, keys, payload, "PASS_PROJECT_RUNTIME_PACK_INITIALIZED", 0)
+
+    # 1. Start from the actual generated router artifact and verify the frozen
+    #    locate/route steps are present in it.
+    router_path = project / ".agents" / "skills" / "ai-skill-hub-router" / "SKILL.md"
+    router_text = router_path.read_text(encoding="utf-8")
+    assert router_text.startswith("---\nname: ai-skill-hub-router\n")
+    assert "`../../../.ai/runtime-pack.json`" in router_text
+    for step in ("1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.", "10."):
+        assert f"\n{step} " in router_text, step
+    for code in ROUTER_ERROR_CODES:
+        assert code in router_text, code
+
+    # 2. Read the actual manifest the initializer generated.
+    manifest = json.loads((project / ".ai" / "runtime-pack.json").read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == 1
+    assert manifest["generator"] == {"id": "ai-skill-hub.project-runtime-pack", "version": 1}
+    assert [adapter["id"] for adapter in manifest["adapters"]] == [
+        "agents-entry",
+        "claude-entry",
+        "claude-router",
+        "copilot-entry",
+        "shared-router",
+    ]
+    hub_rel = manifest["hub"]["path"]
+    hub = project / hub_rel
+    resolved_commit = manifest["hub"]["resolved_commit"]
+
+    # 3. Committed gitlink, manifest commit, and materialized hub HEAD agree.
+    gitlink = git(project, "ls-files", "-s", "--", hub_rel, env=isolated_env(env_home)).stdout
+    assert gitlink.startswith(f"160000 {resolved_commit}")
+    head = git(hub, "rev-parse", "HEAD", env=isolated_env(env_home)).stdout.strip()
+    assert head == resolved_commit
+
+    # 4. Locate the Skill from the actual canonical index in the real hub.
+    index_path = project / manifest["routing"]["canonical_index"]
+    assert index_path.is_file()
+    assert index_path.parent.resolve() == hub.resolve()
+    entries = parse_index(index_path)
+    named = "alpha-skill"
+    selected = [entry for entry in entries if entry["name"] == named]
+    assert len(selected) == 1
+
+    # 5. Containment: the indexed canonical path must resolve to
+    #    <hub>/skills/<skill>/SKILL.md with no escape.
+    candidate = (hub / selected[0]["path"]).resolve()
+    expected = (hub / "skills" / named / "SKILL.md").resolve()
+    assert candidate == expected
+
+    # 6. Read the actual canonical SKILL.md in the pinned hub checkout.
+    skill_text = candidate.read_text(encoding="utf-8")
+    assert "name: alpha-skill" in skill_text
+    assert "alpha fixture" in skill_text
+
+    # 7. No project-side copy of the canonical Skill body exists; the only
+    #    SKILL.md files outside the hub are the two thin routers.
+    for relative in ADAPTER_PATHS:
+        assert "alpha fixture" not in (project / relative).read_text(encoding="utf-8")
+    outside_hub = [
+        path
+        for path in project.rglob("SKILL.md")
+        if ".ai" not in path.relative_to(project).parts
+    ]
+    assert sorted(path.relative_to(project).as_posix() for path in outside_hub) == sorted(
+        path for path in ADAPTER_PATHS if path.endswith("SKILL.md")
+    )
