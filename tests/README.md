@@ -18,6 +18,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\run_local_checks.p
   - `python tests/test_adapter_consistency_smoke.py`
 - Skill structure baseline:
   - `python tests/test_skill_structure.py`
+- Project runtime pack initializer（需 `pwsh` + `git`，fixtures 全部在 OS temp 内）:
+  - `python -m pytest tests/test_init_project_runtime_pack.py -q -p no:cacheprovider`
 
 ## Notes
 

@@ -282,6 +282,35 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\run_local_checks.p
 - 输出会显式区分 environment / permission / logic 三类失败
 - 这是本地维护入口，不是 CI、controller 或自动修复器
 
+## init_project_runtime_pack.ps1
+
+用途：
+
+- 在一个 clean Git 项目根目录接入 ai-skill-hub runtime pack：默认以 exact-commit Git submodule 挂载 `.ai/ai-skill-hub`，并生成三个 managed-block 入口（`AGENTS.md`、`CLAUDE.md`、`.github/copilot-instructions.md`）、两个项目级 router Skill（`.agents/`、`.claude/` 下各一个 `ai-skill-hub-router/SKILL.md`）和审计 manifest `.ai/runtime-pack.json`。
+
+最短调用：
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\init_project_runtime_pack.ps1 `
+  -ProjectPath 'D:\my-project'
+```
+
+常用参数：
+
+- `-ProjectPath`：目标项目根（必须等于 `git rev-parse --show-toplevel`）
+- `-HubMode`：`Submodule`（默认）或 `ExternalPath`（显式本机 opt-in，需传绝对 `-HubPath`，禁止 `-HubUrl`）
+- `-HubUrl`：hub 远端 URL；Submodule 模式缺省读取本仓库 `origin`
+- `-HubRef`：branch/tag/40 位 commit，默认 `main`
+- `-DryRun`：只输出计划，零 repo mutation
+
+安全边界：
+
+- 需要 PowerShell 7.4+ 与 Git 2.40+；仅 Windows；不支持非 Git 项目。
+- 首次执行要求工作区完全 clean；失败时按 journal 回滚到 exact pre-state（exit 3），回滚无法验证时保留 evidence（exit 4）。
+- 无 `-Force`、无交互 merge、不创建 symlink/junction、不改全局 Git 配置、不写用户 home 或 `$CODEX_HOME`。
+- 不自动 commit/push/upgrade；版本变化只返回 `BLOCKED_UPGRADE_REQUIRED`。
+- 冻结设计契约见 `docs/design/project_runtime_pack_mvp_v1_design_contract.md`。
+
 ## audit_derivative_surfaces.py
 
 用途：

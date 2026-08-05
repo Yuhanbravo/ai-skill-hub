@@ -296,6 +296,11 @@ function Get-CheckCatalog {
         args = @('tests\test_skill_structure.py')
         expected_evidence = 'tests\test_skill_structure.py'
     }
+    $projectRuntimePack = @{
+        name = 'project-runtime-pack'
+        args = @('-m', 'pytest', 'tests\test_init_project_runtime_pack.py', '-q', '-p', 'no:cacheprovider')
+        expected_evidence = 'tests\test_init_project_runtime_pack.py'
+    }
 
     return [ordered]@{
         router = @($skillRouter)
@@ -312,6 +317,7 @@ function Get-CheckCatalog {
             $dryRunNoSideEffects
             $codexUserSkillsBootstrap
             $reseedAudit
+            $projectRuntimePack
         )
         all = @(
             $skillRouter
@@ -323,6 +329,7 @@ function Get-CheckCatalog {
             $reseedAudit
             $syncSmoke
             $skillStructure
+            $projectRuntimePack
         )
     }
 }
