@@ -129,6 +129,14 @@
 | [`phase3_execution_report.md`](phase3_execution_report.md) | `execution_report` | Historical evidence | Execution receipt only; not a current rule source. |
 | [`phase3_structural_decision_record.md`](phase3_structural_decision_record.md) | `structural_record` | Reference only | Historical structural context; not current authorization. |
 
+### Project Runtime Pack MVP V1
+
+| File | Type | Status | Notes |
+| --- | --- | --- | --- |
+| [`project_runtime_pack_mvp_v1_implementation_execution_report.md`](project_runtime_pack_mvp_v1_implementation_execution_report.md) | `execution_report` | Historical evidence | Execution receipt only; not a current rule source. |
+| [`project_runtime_pack_mvp_v1_remediation_execution_report.md`](project_runtime_pack_mvp_v1_remediation_execution_report.md) | `execution_report` | Historical evidence | Execution receipt only; not a current rule source. |
+| [`project_runtime_pack_mvp_v1_final_closure_report.md`](project_runtime_pack_mvp_v1_final_closure_report.md) | `summary` | Reference only | Work item `ASH-PROJECT-RUNTIME-PACK-MVP-V1` closed locally with notes; not current authorization. |
+
 ### System / Handoff / Migration / Miscellaneous
 
 | File | Type | Status | Notes |

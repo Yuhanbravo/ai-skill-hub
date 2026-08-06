@@ -1,10 +1,53 @@
 # Skill Hub Status
 
-- Updated at: `2026-07-27`
+- Updated at: `2026-08-06`
 - Scope: `ai-skill-hub`
 - Method: `system-status-update` wrapper over `update-project-status`
 - Config: `.codex/skill-config/update-project-status.json`
-- Data sources: Git history through current observed `origin/main` HEAD `3919677`, working tree, `skills/`, `.agents/`, `.github/`, `tools/`, `docs/status/`, `docs/HANDOFF.md`, the Codex User Skills Bootstrap V1 Stage D closure report, and the real-host Check evidence.
+- Data sources: Git history through current observed `origin/main` HEAD `3919677`, working tree, `skills/`, `.agents/`, `.github/`, `tools/`, `docs/status/`, `docs/HANDOFF.md`, the Codex User Skills Bootstrap V1 Stage D closure report, the real-host Check evidence, and the Project Runtime Pack MVP V1 implementation / remediation / final closure reports.
+- Note: this refresh (`2026-08-06`) is a bounded, docs-only status addition for the Project Runtime Pack MVP V1 local final closure. It does not reopen or rewrite any other status line; existing observed `origin/main` facts recorded on earlier dates remain historical.
+
+## Project Runtime Pack MVP V1
+
+- Work item: `ASH-PROJECT-RUNTIME-PACK-MVP-V1`.
+- Status: `CLOSED_LOCAL_ONLY_WITH_NOTES`.
+- Decision: `PASS_WITH_NOTES_PROJECT_RUNTIME_PACK_MVP_V1_LOCAL_FINAL_CLOSURE`.
+- Design: `FROZEN`; Implementation: `COMPLETE`; Remediation: `COMPLETE`; Heterogeneous Validation: `PASS_WITH_NOTES`; Local Closure: `PASS_WITH_NOTES`; Remote Publication: `NOT_AUTHORIZED_NOT_PERFORMED`.
+- Commit chain: design `d4d735e0`, implementation `7c8e54c`, remediation `1f01ab2`; current implementation HEAD `1f01ab256401d72cf23214c99688dc1d17ae9bb7`.
+- Local `origin/main` ahead/behind at closure baseline: `0 3` (local remote-tracking ref; no fetch performed).
+- Core evidence: initializer suite `112 passed x 3`; submodule-failure `20/20`; concurrency `20/20`; real-index pre-swap unchanged; rollback exact restoration PASS; current-HEAD fixture PASS; Codex E2E PASS; Kimi E2E PASS.
+- Findings: F-01 ~ F-07, F-09 `CLOSED`; F-08 `CLOSED_TEST_HARDENED`; F-10 ~ F-15 `DEFERRED_NONBLOCKING_V1_NOTE` (substance preserved in the final closure report).
+- Known notes (not hidden): pre-existing `codex-user-skills-bootstrap` MAX_PATH baseline (`smoke` 7/8, `all` 9/10; not introduced or expanded by this work item); Copilot workspace-root authenticated fresh-conversation E2E not literally verified (routing chain verified by real-artifact walkthrough plus Codex/Kimi cross-check; native Skill picker registration non-blocking); Claude Code authenticated E2E not performed (non-blocking); `file://` local fixture requires `protocol.file.allow=always` under current Git security defaults (local test fixture limitation only).
+- Artifacts: `tools/init_project_runtime_pack.ps1`, `tools/project_runtime_pack_schema_v1.json`, `tests/test_init_project_runtime_pack.py`, and the task records in `tasks/`.
+- Deferred next actions (future independent work items only): optional authenticated Copilot workspace-root verification; optional Claude Code authenticated E2E; separate MAX_PATH baseline remediation; deferred minor hardening for F-10 ~ F-15; remote publication under separate authorization; consumer-project pilot using the finalized Runtime Pack.
+
+```text
+Project_Runtime_Pack_MVP_V1=
+CLOSED_LOCAL_ONLY_WITH_NOTES
+
+Decision=
+PASS_WITH_NOTES_PROJECT_RUNTIME_PACK_MVP_V1_LOCAL_FINAL_CLOSURE
+
+Design=
+FROZEN
+
+Implementation=
+COMPLETE
+
+Remediation=
+COMPLETE
+
+Heterogeneous_Validation=
+PASS_WITH_NOTES
+
+Remote_Publication=
+NOT_AUTHORIZED_NOT_PERFORMED
+
+Current_Implementation_HEAD=
+1f01ab256401d72cf23214c99688dc1d17ae9bb7
+```
+
+## Codex User Skills Bootstrap V1 Closure
 
 ## Codex User Skills Bootstrap V1 Closure
 
