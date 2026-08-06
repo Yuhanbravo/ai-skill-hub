@@ -425,7 +425,11 @@ def test_normalized_hash_accepts_equivalent_router_newlines(
     commit_all(project, "add runtime pack", session_env)
     router = project / ".agents" / "skills" / "ai-skill-hub-router" / "SKILL.md"
     router.write_bytes(router.read_text(encoding="utf-8").replace("\n", newline).encode("utf-8"))
-    commit_all(project, "equivalent router line endings", session_env)
+    diff = git(project, "diff", "--quiet", env=session_env, check=False)
+    if diff.returncode == 1:
+        commit_all(project, "equivalent router line endings", session_env)
+    elif diff.returncode != 0:
+        raise AssertionError(f"git diff --quiet failed: {diff.stdout} {diff.stderr}")
     result, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
     assert_decision(result, keys, payload, "NO_CHANGE_PROJECT_RUNTIME_PACK_ALREADY_CURRENT", 0)
 
@@ -440,7 +444,10 @@ def test_crlf_fresh_clone_rerun_no_change(
         [GIT, "-c", "core.autocrlf=true", "clone", "-q", "--no-local", str(project), str(clone)],
         check=True, capture_output=True, env=session_env,
     )
+    git(clone, "config", "core.autocrlf", "true", env=session_env)
     git(clone, "-c", "protocol.file.allow=always", "submodule", "update", "--init", env=session_env)
+    assert git(clone, "status", "--porcelain", env=session_env).stdout == ""
+    assert git(clone / ".ai" / "ai-skill-hub", "status", "--porcelain", env=session_env).stdout == ""
     result, keys, payload = run_init(clone, "-HubUrl", str(hub_remote["url"]))
     assert_decision(result, keys, payload, "NO_CHANGE_PROJECT_RUNTIME_PACK_ALREADY_CURRENT", 0)
     assert git(clone, "status", "--porcelain", env=session_env).stdout == ""
