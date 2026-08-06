@@ -417,6 +417,67 @@ def test_committed_rerun_no_change(
     assert staged_paths(project, project.parent / "fake-home") == []
 
 
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_normalized_hash_accepts_equivalent_router_newlines(
+    project: Path, hub_remote: dict[str, object], session_env: dict[str, str], newline: str
+) -> None:
+    run_init(project, "-HubUrl", str(hub_remote["url"]))
+    commit_all(project, "add runtime pack", session_env)
+    router = project / ".agents" / "skills" / "ai-skill-hub-router" / "SKILL.md"
+    router.write_bytes(router.read_text(encoding="utf-8").replace("\n", newline).encode("utf-8"))
+    commit_all(project, "equivalent router line endings", session_env)
+    result, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(result, keys, payload, "NO_CHANGE_PROJECT_RUNTIME_PACK_ALREADY_CURRENT", 0)
+
+
+def test_crlf_fresh_clone_rerun_no_change(
+    project: Path, hub_remote: dict[str, object], session_env: dict[str, str]
+) -> None:
+    run_init(project, "-HubUrl", str(hub_remote["url"]))
+    commit_all(project, "add runtime pack", session_env)
+    clone = project.parent / "autocrlf-fresh-clone"
+    subprocess.run(
+        [GIT, "-c", "core.autocrlf=true", "clone", "-q", "--no-local", str(project), str(clone)],
+        check=True, capture_output=True, env=session_env,
+    )
+    git(clone, "-c", "protocol.file.allow=always", "submodule", "update", "--init", env=session_env)
+    result, keys, payload = run_init(clone, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(result, keys, payload, "NO_CHANGE_PROJECT_RUNTIME_PACK_ALREADY_CURRENT", 0)
+    assert git(clone, "status", "--porcelain", env=session_env).stdout == ""
+
+
+def test_legacy_manifest_migrates_only_when_logical_content_matches(
+    project: Path, hub_remote: dict[str, object], session_env: dict[str, str]
+) -> None:
+    run_init(project, "-HubUrl", str(hub_remote["url"]))
+    manifest_path = project / ".ai" / "runtime-pack.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for adapter in manifest["adapters"]:
+        adapter.pop("hash_algorithm")
+        adapter.pop("hash_normalization")
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")
+    commit_all(project, "legacy manifest", session_env)
+    result, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(result, keys, payload, "PASS_PROJECT_RUNTIME_PACK_INITIALIZED", 0)
+    upgraded = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert {adapter["hash_normalization"] for adapter in upgraded["adapters"]} == {"utf8-lf-v1"}
+    commit_all(project, "migrate hash semantics", session_env)
+    rerun, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(rerun, keys, payload, "NO_CHANGE_PROJECT_RUNTIME_PACK_ALREADY_CURRENT", 0)
+
+
+def test_generated_router_character_tamper_fails_closed(
+    project: Path, hub_remote: dict[str, object], session_env: dict[str, str]
+) -> None:
+    run_init(project, "-HubUrl", str(hub_remote["url"]))
+    commit_all(project, "add runtime pack", session_env)
+    router = project / ".agents" / "skills" / "ai-skill-hub-router" / "SKILL.md"
+    router.write_text(router.read_text(encoding="utf-8").replace("read-only", "write-only", 1), encoding="utf-8", newline="\n")
+    commit_all(project, "tamper router", session_env)
+    result, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(result, keys, payload, "BLOCKED_MANAGED_CONTENT_MODIFIED", 2)
+
+
 # ---------------------------------------------------------------------------
 # 4: DryRun
 # ---------------------------------------------------------------------------

@@ -703,7 +703,7 @@ Cross_Platform=NOT_IN_MVP
 - D-02：branch/tag/40-char commit解析为 exact commit；gitlink是运行时版本权威；不自动 follow，不在 initializer升级。
 - D-03：六项产物全部 required；两个 router 使用最小 `name+description` frontmatter；router只读并 fail closed。
 - D-04：ManagedBlock默认；外部人工内容 byte-preserved；hash识别 managed modification；无 Force/interactive merge。
-- D-05：schema v1 exact-field、exact-order、UTF-8 no BOM/LF；JSON是 locator/audit record，不覆盖 gitlink/skills。
+- D-05：schema v1 exact-field、exact-order、UTF-8 no BOM/LF；JSON是 locator/audit record，不覆盖 gitlink/skills。Adapter `content_sha256` 使用 SHA-256；新 manifest 必须声明 `hash_algorithm: sha256` 与 `hash_normalization: utf8-lf-v1`，即 UTF-8 文本的 CRLF/CR 规范化为 LF 后计算。旧 manifest 缺少这两个字段时按历史 raw-hash 契约读取；仅当冻结的 LF 逻辑内容仍完全匹配时，initializer 才能生成可审计的新 manifest，字符内容差异仍 fail closed。
 - D-06：七个参数及默认值冻结；仅 Git root；首次 clean；只允许完整 managed staged rerun例外。
 - D-07：alternate index + byte backups + atomic file operations + exact rollback verification；DryRun零 repo mutation。
 - D-08：Windows 10/11、PowerShell 7.4+、Git 2.40+；safe.directory/credentials由环境负责。

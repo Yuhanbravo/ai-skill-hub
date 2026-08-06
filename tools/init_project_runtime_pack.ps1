@@ -61,6 +61,8 @@ $script:StartMarker = '<!-- ai-skill-hub:runtime-pack:start schema=v1 -->'
 $script:EndMarker = '<!-- ai-skill-hub:runtime-pack:end -->'
 $script:MarkerPrefix = '<!-- ai-skill-hub:runtime-pack:'
 $script:ManifestRelPath = '.ai/runtime-pack.json'
+$script:ManagedTextHashAlgorithm = 'sha256'
+$script:ManagedTextHashNormalization = 'utf8-lf-v1'
 
 $script:DecisionMap = @{
     NOT_GIT_REPOSITORY = 'BLOCKED_NOT_GIT_REPOSITORY'
@@ -252,6 +254,16 @@ function Get-Sha256Text {
     return Get-Sha256Bytes -Bytes ($script:Utf8NoBom.GetBytes($Text))
 }
 
+function ConvertTo-Utf8LfV1 {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text)
+    return $Text.Replace("`r`n", "`n").Replace("`r", "`n")
+}
+
+function Get-Sha256NormalizedText {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text)
+    return Get-Sha256Text -Text (ConvertTo-Utf8LfV1 -Text $Text)
+}
+
 function Get-Sha256File {
     param([Parameter(Mandatory = $true)][string]$Path)
     return Get-Sha256Bytes -Bytes ([System.IO.File]::ReadAllBytes($Path))
@@ -259,7 +271,7 @@ function Get-Sha256File {
 
 function Get-ContentHash {
     param([Parameter(Mandatory = $true)][string]$Block)
-    return Get-Sha256Text -Text (Get-CanonicalContent -Block $Block)
+    return Get-Sha256NormalizedText -Text (Get-CanonicalContent -Block $Block)
 }
 
 # ---------------------------------------------------------------------------
@@ -495,16 +507,17 @@ function Read-ExistingTextFile {
     }
     $crlfCount = ([regex]::Matches($text, "`r`n")).Count
     $stripped = $text.Replace("`r`n", '')
-    if ($stripped.Contains("`r")) {
-        Throw-PackError -Condition 'TEXT_FORMAT_UNSUPPORTED' -Message "$Label contains lone carriage returns."
-    }
+    $crCount = ([regex]::Matches($stripped, "`r")).Count
     $bareLf = ([regex]::Matches($stripped, "`n")).Count
     $newline = 'LF'
-    if ($crlfCount -gt 0 -and $bareLf -gt 0) {
-        Throw-PackError -Condition 'TEXT_FORMAT_UNSUPPORTED' -Message "$Label mixes CRLF and LF newlines."
+    if (($crlfCount -gt 0 -and ($bareLf -gt 0 -or $crCount -gt 0)) -or ($bareLf -gt 0 -and $crCount -gt 0)) {
+        Throw-PackError -Condition 'TEXT_FORMAT_UNSUPPORTED' -Message "$Label mixes newline styles."
     }
     if ($crlfCount -gt 0) {
         $newline = 'CRLF'
+    }
+    elseif ($crCount -gt 0) {
+        $newline = 'CR'
     }
     return [pscustomobject]@{
         Bytes = $bytes
@@ -519,8 +532,9 @@ function Get-ManagedBlockInfo {
         [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text,
         [Parameter(Mandatory = $true)][string]$Label
     )
-    $endsWithLf = $Text.EndsWith("`n")
-    $lines = @($Text -split "`n")
+    $normalizedText = ConvertTo-Utf8LfV1 -Text $Text
+    $endsWithLf = $normalizedText.EndsWith("`n")
+    $lines = @($normalizedText -split "`n")
     if ($endsWithLf) {
         $lines = $lines[0..($lines.Count - 2)]
     }
@@ -529,7 +543,7 @@ function Get-ManagedBlockInfo {
     $startExact = New-Object 'System.Collections.Generic.List[int]'
     $endExact = New-Object 'System.Collections.Generic.List[int]'
     for ($i = 0; $i -lt $lines.Count; $i++) {
-        $line = $lines[$i].TrimEnd("`r")
+        $line = $lines[$i]
         if ($line.StartsWith($script:MarkerPrefix, [System.StringComparison]::Ordinal)) {
             if ($line.StartsWith($script:MarkerPrefix + 'start', [System.StringComparison]::Ordinal)) {
                 $startLike.Add($i)
@@ -561,7 +575,7 @@ function Get-ManagedBlockInfo {
     if ($invalid) {
         Throw-PackError -Condition 'MANAGED_BLOCK_INVALID' -Message "$Label has duplicate, nested, orphan, reversed, or non-v1 managed markers."
     }
-    $blockLines = $lines[$startExact[0]..$endExact[0]] | ForEach-Object { $_.TrimEnd("`r") }
+    $blockLines = $lines[$startExact[0]..$endExact[0]]
     $canonical = ($blockLines -join "`n") + "`n"
     return [pscustomobject]@{
         Kind = 'Block'
@@ -578,6 +592,9 @@ function ConvertTo-HostNewline {
     )
     if ($Newline -eq 'CRLF') {
         return $CanonicalText.Replace("`n", "`r`n")
+    }
+    if ($Newline -eq 'CR') {
+        return $CanonicalText.Replace("`n", "`r")
     }
     return $CanonicalText
 }
@@ -710,7 +727,9 @@ function New-ManifestText {
         $lines.Add('      "id": ' + (ConvertTo-JsonLiteral -Value ([string]$adapter.Id)) + ',')
         $lines.Add('      "path": ' + (ConvertTo-JsonLiteral -Value ([string]$adapter.Path)) + ',')
         $lines.Add('      "management": ' + (ConvertTo-JsonLiteral -Value ([string]$adapter.Management)) + ',')
-        $lines.Add('      "content_sha256": ' + (ConvertTo-JsonLiteral -Value ([string]$adapter.Hash)))
+        $lines.Add('      "content_sha256": ' + (ConvertTo-JsonLiteral -Value ([string]$adapter.Hash)) + ',')
+        $lines.Add('      "hash_algorithm": ' + (ConvertTo-JsonLiteral -Value $script:ManagedTextHashAlgorithm) + ',')
+        $lines.Add('      "hash_normalization": ' + (ConvertTo-JsonLiteral -Value $script:ManagedTextHashNormalization))
         if ($i -lt $Adapters.Count - 1) {
             $lines.Add('    },')
         }
@@ -833,7 +852,19 @@ function Read-RuntimeManifest {
     }
     for ($i = 0; $i -lt $expectedIds.Count; $i++) {
         $adapter = $adapters[$i]
-        Assert-ExactProperties -Value $adapter -Expected @('id', 'path', 'management', 'content_sha256') -Label "adapters[$i]"
+        $adapterFields = @($adapter.PSObject.Properties.Name)
+        $hasAlgorithm = $adapterFields -ccontains 'hash_algorithm'
+        $hasNormalization = $adapterFields -ccontains 'hash_normalization'
+        if ($hasAlgorithm -ne $hasNormalization) {
+            Throw-PackError -Condition 'MANIFEST_INVALID' -Message "manifest adapter hash metadata for $($adapter.id) must be present together."
+        }
+        $expectedAdapterFields = if ($hasAlgorithm) {
+            @('id', 'path', 'management', 'content_sha256', 'hash_algorithm', 'hash_normalization')
+        }
+        else {
+            @('id', 'path', 'management', 'content_sha256')
+        }
+        Assert-ExactProperties -Value $adapter -Expected $expectedAdapterFields -Label "adapters[$i]"
         if ($adapter.id -cne $expectedIds[$i]) {
             Throw-PackError -Condition 'MANIFEST_INVALID' -Message 'manifest adapters must be the exact five ids in ordinal ascending order.'
         }
@@ -846,6 +877,12 @@ function Read-RuntimeManifest {
         }
         if ([string]$adapter.content_sha256 -cnotmatch '^[0-9a-f]{64}$') {
             Throw-PackError -Condition 'MANIFEST_INVALID' -Message "manifest adapter content_sha256 for $($adapter.id) is invalid."
+        }
+        if ($hasAlgorithm -and [string]$adapter.hash_algorithm -cne $script:ManagedTextHashAlgorithm) {
+            Throw-PackError -Condition 'SCHEMA_INCOMPATIBLE' -Message "manifest adapter hash_algorithm for $($adapter.id) is not recognized."
+        }
+        if ($hasNormalization -and [string]$adapter.hash_normalization -cne $script:ManagedTextHashNormalization) {
+            Throw-PackError -Condition 'SCHEMA_INCOMPATIBLE' -Message "manifest adapter hash_normalization for $($adapter.id) is not recognized."
         }
     }
     return $manifest
@@ -1209,10 +1246,13 @@ function Get-SubmoduleHead {
 
 function Test-PackAdaptersCurrent {
     param([Parameter(Mandatory = $true)][object]$Manifest)
+    $requiresMigration = $false
     for ($i = 0; $i -lt $script:AdapterDefs.Count; $i++) {
         $def = $script:AdapterDefs[$i]
         $absPath = Join-Path $script:Ctx.ProjectRoot ([string]$def.Path).Replace('/', '\')
-        $expectedHash = [string]$Manifest.adapters[$i].content_sha256
+        $adapter = $Manifest.adapters[$i]
+        $expectedHash = [string]$adapter.content_sha256
+        $normalizationAware = @($adapter.PSObject.Properties.Name) -ccontains 'hash_normalization'
         if (-not (Test-Path -LiteralPath $absPath -PathType Leaf)) {
             Throw-PackError -Condition 'MANAGED_CONTENT_MODIFIED' -Message "Adapter file '$($def.Path)' is missing."
         }
@@ -1220,8 +1260,19 @@ function Test-PackAdaptersCurrent {
             Throw-PackError -Condition 'PATH_SAFETY_VIOLATION' -Message "Adapter file '$($def.Path)' is a reparse point."
         }
         if ($def.Management -eq 'generated-file') {
-            if ((Get-Sha256File -Path $absPath) -cne $expectedHash) {
+            $fileInfo = Read-ExistingTextFile -Path $absPath -Label $def.Path
+            if ($fileInfo.HasBom) {
+                Throw-PackError -Condition 'MANAGED_CONTENT_MODIFIED' -Message "Generated router '$($def.Path)' has an unsupported BOM (local modification)."
+            }
+            $actualNormalizedHash = Get-Sha256NormalizedText -Text $fileInfo.Text
+            if ($normalizationAware -and $actualNormalizedHash -cne $expectedHash) {
                 Throw-PackError -Condition 'MANAGED_CONTENT_MODIFIED' -Message "Generated router '$($def.Path)' does not match the manifest hash (local modification)."
+            }
+            if (-not $normalizationAware -and (Get-Sha256File -Path $absPath) -cne $expectedHash) {
+                if ($expectedHash -cne (Get-ContentHash -Block $def.Block) -or $actualNormalizedHash -cne $expectedHash) {
+                    Throw-PackError -Condition 'MANAGED_CONTENT_MODIFIED' -Message "Generated router '$($def.Path)' does not match the legacy manifest hash (local modification)."
+                }
+                $requiresMigration = $true
             }
         }
         else {
@@ -1230,11 +1281,18 @@ function Test-PackAdaptersCurrent {
             if ($blockInfo.Kind -ne 'Block') {
                 Throw-PackError -Condition 'MANAGED_CONTENT_MODIFIED' -Message "Managed block in '$($def.Path)' is missing."
             }
-            if ((Get-Sha256Text -Text $blockInfo.CanonicalText) -cne $expectedHash) {
+            if ((Get-Sha256NormalizedText -Text $blockInfo.CanonicalText) -cne $expectedHash) {
                 Throw-PackError -Condition 'MANAGED_CONTENT_MODIFIED' -Message "Managed block in '$($def.Path)' does not match the manifest hash (local modification)."
+            }
+            if (-not $normalizationAware) {
+                if ($expectedHash -cne (Get-ContentHash -Block $def.Block)) {
+                    Throw-PackError -Condition 'MANAGED_CONTENT_MODIFIED' -Message "Managed block in '$($def.Path)' does not match the legacy canonical hash (local modification)."
+                }
+                $requiresMigration = $true
             }
         }
     }
+    return $requiresMigration
 }
 
 function Add-PlanAction {
@@ -1269,6 +1327,7 @@ function Invoke-Preflight {
         ManifestPath = ''
         ManifestExists = $false
         Manifest = $null
+        RequiresHashNormalizationMigration = $false
         SubmoduleAction = ''
         GitlinkCommit = ''
         SectionName = ''
@@ -1614,7 +1673,7 @@ function Invoke-ManifestRerunEvaluation {
             Throw-PackError -Condition 'UPGRADE_REQUIRED' -Message 'The requested ref differs from the recorded runtime pack ref; upgrades are a separate work item.'
         }
     }
-    Test-PackAdaptersCurrent -Manifest $manifest
+    $ctx.RequiresHashNormalizationMigration = Test-PackAdaptersCurrent -Manifest $manifest
     if ($manifestMode -ceq 'submodule') {
         $indexPath = Join-Path $ctx.HubAbsPath 'SKILLS_INDEX.md'
         if ($ctx.SubmoduleAction -ne 'materialize' -and -not (Test-Path -LiteralPath $indexPath -PathType Leaf)) {
@@ -1916,14 +1975,25 @@ function Invoke-ManifestGeneration {
     $manifestText = New-ManifestText -Mode $mode -HubPathOut $ctx.HubPathNorm -HubUrlOut $ctx.HubUrlNorm `
         -RequestedRefOut $HubRef -ResolvedCommit $ctx.ResolvedCommit -CanonicalIndex $canonicalIndex -Adapters $adapters
     Write-FileAtomic -Path $ctx.ManifestPath -Bytes ($script:Utf8NoBom.GetBytes($manifestText))
-    [void]$ctx.CreatedPaths.Add($ctx.ManifestPath)
+    if (-not $ctx.ManifestExists) {
+        [void]$ctx.CreatedPaths.Add($ctx.ManifestPath)
+    }
+}
+
+function Invoke-ManifestHashMigrationPlan {
+    $ctx = $script:Ctx
+    Add-PlanAction -Token "migrate-hash-normalization:$($script:ManifestRelPath)" -Mutating $true -WorktreeChange $true
+    [void]$ctx.PlannedStageSet.Add($script:ManifestRelPath)
+    Add-PlanAction -Token 'stage-index' -Mutating $true -WorktreeChange $false
+    $script:Result.Planned_Actions = (($ctx.Plan | ForEach-Object { $_.Token }) -join ';')
+    $script:Result.Changed_Count = @($ctx.Plan | Where-Object { $_.Mutating }).Count
 }
 
 function Invoke-PackValidation {
     $ctx = $script:Ctx
     $altEnv = @{ GIT_INDEX_FILE = $ctx.AlternateIndexPath }
     $manifest = Read-RuntimeManifest -ManifestPath $ctx.ManifestPath
-    Test-PackAdaptersCurrent -Manifest $manifest
+    [void](Test-PackAdaptersCurrent -Manifest $manifest)
     if ($HubMode -eq 'Submodule') {
         $gitlink = Get-GitlinkCommit -RelPath $ctx.HubPathNorm -Env $altEnv
         if ($gitlink -cne $ctx.ResolvedCommit) {
@@ -2000,7 +2070,7 @@ function Invoke-FinalVerification {
         Throw-PackError -Condition 'UNEXPECTED_ERROR' -Message 'Unexpected unstaged or untracked changes remain after staging.'
     }
     $manifest = Read-RuntimeManifest -ManifestPath $ctx.ManifestPath
-    Test-PackAdaptersCurrent -Manifest $manifest
+    [void](Test-PackAdaptersCurrent -Manifest $manifest)
     if ($HubMode -eq 'Submodule') {
         $gitlink = Get-GitlinkCommit -RelPath $ctx.HubPathNorm
         if ($gitlink -cne $ctx.ResolvedCommit) {
@@ -2253,20 +2323,31 @@ function Invoke-PackMain {
         if ($script:Ctx.ManifestExists) {
             Invoke-ManifestRerunEvaluation
             if ($script:Ctx.SubmoduleAction -ne 'materialize') {
-                $script:Result.Decision = $script:DecisionMap['NO_CHANGE']
-                $script:Result.Message = 'Project runtime pack is already current.'
-                Write-PackResult
-                return 0
+                if (-not $script:Ctx.RequiresHashNormalizationMigration) {
+                    $script:Result.Decision = $script:DecisionMap['NO_CHANGE']
+                    $script:Result.Message = 'Project runtime pack is already current.'
+                    Write-PackResult
+                    return 0
+                }
+                Invoke-ManifestHashMigrationPlan
+                if ($DryRun) {
+                    $script:Result.Decision = $script:DecisionMap['DRY_RUN']
+                    $script:Result.Message = 'DryRun completed with zero repository mutation.'
+                    Write-PackResult
+                    return 0
+                }
             }
-            # Materialize-only path: valid manifest, committed gitlink, missing checkout.
-            Add-PlanAction -Token "submodule-materialize:$($script:Ctx.HubPathNorm)" -Mutating $true -WorktreeChange $true
-            $script:Result.Planned_Actions = (($script:Ctx.Plan | ForEach-Object { $_.Token }) -join ';')
-            $script:Result.Changed_Count = 1
-            if ($DryRun) {
-                $script:Result.Decision = $script:DecisionMap['DRY_RUN']
-                $script:Result.Message = 'DryRun completed with zero repository mutation.'
-                Write-PackResult
-                return 0
+            else {
+                # Materialize-only path: valid manifest, committed gitlink, missing checkout.
+                Add-PlanAction -Token "submodule-materialize:$($script:Ctx.HubPathNorm)" -Mutating $true -WorktreeChange $true
+                $script:Result.Planned_Actions = (($script:Ctx.Plan | ForEach-Object { $_.Token }) -join ';')
+                $script:Result.Changed_Count = 1
+                if ($DryRun) {
+                    $script:Result.Decision = $script:DecisionMap['DRY_RUN']
+                    $script:Result.Message = 'DryRun completed with zero repository mutation.'
+                    Write-PackResult
+                    return 0
+                }
             }
         }
         else {
@@ -2290,6 +2371,11 @@ function Invoke-PackMain {
         if ($ctx.GitmodulesExistedPre) {
             [System.IO.File]::WriteAllBytes((Join-Path $ctx.JournalRoot 'gitmodules.pre'), $ctx.GitmodulesPreBytes)
         }
+        if ($ctx.ManifestExists) {
+            $manifestBackupPath = Join-Path $ctx.JournalRoot ('backup-' + [guid]::NewGuid().ToString('N'))
+            [System.IO.File]::WriteAllBytes($manifestBackupPath, [System.IO.File]::ReadAllBytes($ctx.ManifestPath))
+            $ctx.HumanFileBackups[$ctx.ManifestPath] = $manifestBackupPath
+        }
         foreach ($def in $script:AdapterDefs) {
             $absPath = Join-Path $ctx.ProjectRoot ([string]$def.Path).Replace('/', '\')
             if (Test-Path -LiteralPath $absPath -PathType Leaf) {
@@ -2305,8 +2391,10 @@ function Invoke-PackMain {
         Invoke-SubmoduleMutation
         Assert-FailAt -Point 'AfterSubmodule'
 
-        if (-not $ctx.ManifestExists) {
-            Invoke-AdapterGeneration
+        if (-not $ctx.ManifestExists -or $ctx.RequiresHashNormalizationMigration) {
+            if (-not $ctx.ManifestExists) {
+                Invoke-AdapterGeneration
+            }
             Invoke-ManifestGeneration
             Assert-FailAt -Point 'AfterManifest'
         }
