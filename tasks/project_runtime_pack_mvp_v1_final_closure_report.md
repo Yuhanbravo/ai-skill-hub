@@ -352,3 +352,29 @@ Recommended_Next_Action=
 SEPARATE_REMOTE_PUBLICATION_AUTHORIZATION
 
 ```
+
+## 12. Remote Publication Follow-up (2026-08-06)
+
+Under separate authorization (`CONTROLLED_REMOTE_PUBLICATION_AND_FINAL_CLOSURE`), the local closure commit `4e3366c3...` was safely published to the authoritative remote and the work item was re-recorded as remotely published. This addendum records that follow-up; the local closure facts above remain historical.
+
+```text
+Remote_Publication=
+PASS
+
+Published_Commit=
+4e3366c3d2e605fb64cfcf31f2cad3d780ecbfd1
+
+Authoritative_Remote=
+gitea-nas:yuhanbravo/ai-skill-hub.git
+
+Work_Item_Status=
+CLOSED_REMOTE_PUBLISHED_WITH_NOTES
+
+Decision=
+PASS_WITH_NOTES_PROJECT_RUNTIME_PACK_MVP_V1_REMOTE_PUBLICATION_AND_FINAL_CLOSURE
+
+Force_Push=
+NO
+```
+
+Full evidence: `tasks/project_runtime_pack_mvp_v1_remote_publication_report.md`. All notes preserved in this report remain in force (MAX_PATH baseline, Copilot workspace-root E2E, Claude E2E, F-10 ~ F-15 with substance, `file://` fixture); none are rewritten to unconditional PASS.

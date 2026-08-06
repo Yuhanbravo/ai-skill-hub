@@ -135,7 +135,8 @@
 | --- | --- | --- | --- |
 | [`project_runtime_pack_mvp_v1_implementation_execution_report.md`](project_runtime_pack_mvp_v1_implementation_execution_report.md) | `execution_report` | Historical evidence | Execution receipt only; not a current rule source. |
 | [`project_runtime_pack_mvp_v1_remediation_execution_report.md`](project_runtime_pack_mvp_v1_remediation_execution_report.md) | `execution_report` | Historical evidence | Execution receipt only; not a current rule source. |
-| [`project_runtime_pack_mvp_v1_final_closure_report.md`](project_runtime_pack_mvp_v1_final_closure_report.md) | `summary` | Reference only | Work item `ASH-PROJECT-RUNTIME-PACK-MVP-V1` closed locally with notes; not current authorization. |
+| [`project_runtime_pack_mvp_v1_final_closure_report.md`](project_runtime_pack_mvp_v1_final_closure_report.md) | `summary` | Reference only | Work item `ASH-PROJECT-RUNTIME-PACK-MVP-V1` local closure with notes; remote publication follow-up recorded separately; not current authorization. |
+| [`project_runtime_pack_mvp_v1_remote_publication_report.md`](project_runtime_pack_mvp_v1_remote_publication_report.md) | `execution_report` | Historical evidence | Remote publication record for `ASH-PROJECT-RUNTIME-PACK-MVP-V1`; evidence only, not a current rule source. |
 
 ### System / Handoff / Migration / Miscellaneous
 
