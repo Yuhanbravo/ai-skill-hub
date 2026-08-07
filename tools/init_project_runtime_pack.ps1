@@ -1472,6 +1472,16 @@ function Invoke-Preflight {
         $script:Result.Manifest_Status = 'VALID'
         $ctx.ResolvedCommit = [string]$ctx.Manifest.hub.resolved_commit
         $script:Result.Resolved_Commit = $ctx.ResolvedCommit
+        if (
+            [string]$ctx.Manifest.hub.mode -ceq 'submodule' -and
+            -not $script:BoundParams.ContainsKey('HubUrl')
+        ) {
+            $ctx.HubUrlNorm = [string]$ctx.Manifest.hub.url
+            $script:Result.Hub_Url = $ctx.HubUrlNorm
+        }
+        if (-not $script:BoundParams.ContainsKey('HubRef')) {
+            $script:Result.Requested_Ref = [string]$ctx.Manifest.hub.requested_ref
+        }
     }
 
     # --- Managed file / generated file structure checks ----------------------
@@ -1980,6 +1990,28 @@ function Invoke-ManifestGeneration {
     }
 }
 
+function Invoke-ManifestHashMetadataMigration {
+    $ctx = $script:Ctx
+    $manifest = $ctx.Manifest
+    $adapters = @()
+    for ($i = 0; $i -lt $script:AdapterDefs.Count; $i++) {
+        $def = $script:AdapterDefs[$i]
+        $existing = $manifest.adapters[$i]
+        $adapters += [pscustomobject]@{
+            Id = [string]$existing.id
+            Path = [string]$existing.path
+            Management = [string]$existing.management
+            Hash = Get-ContentHash -Block $def.Block
+        }
+    }
+    $manifestText = New-ManifestText -Mode ([string]$manifest.hub.mode) `
+        -HubPathOut ([string]$manifest.hub.path) -HubUrlOut ([string]$manifest.hub.url) `
+        -RequestedRefOut ([string]$manifest.hub.requested_ref) `
+        -ResolvedCommit ([string]$manifest.hub.resolved_commit) `
+        -CanonicalIndex ([string]$manifest.routing.canonical_index) -Adapters $adapters
+    Write-FileAtomic -Path $ctx.ManifestPath -Bytes ($script:Utf8NoBom.GetBytes($manifestText))
+}
+
 function Invoke-ManifestHashMigrationPlan {
     $ctx = $script:Ctx
     Add-PlanAction -Token "migrate-hash-normalization:$($script:ManifestRelPath)" -Mutating $true -WorktreeChange $true
@@ -2391,11 +2423,13 @@ function Invoke-PackMain {
         Invoke-SubmoduleMutation
         Assert-FailAt -Point 'AfterSubmodule'
 
-        if (-not $ctx.ManifestExists -or $ctx.RequiresHashNormalizationMigration) {
-            if (-not $ctx.ManifestExists) {
-                Invoke-AdapterGeneration
-            }
+        if (-not $ctx.ManifestExists) {
+            Invoke-AdapterGeneration
             Invoke-ManifestGeneration
+            Assert-FailAt -Point 'AfterManifest'
+        }
+        elseif ($ctx.RequiresHashNormalizationMigration) {
+            Invoke-ManifestHashMetadataMigration
             Assert-FailAt -Point 'AfterManifest'
         }
         Invoke-PackValidation

@@ -316,7 +316,7 @@ Interactive_Merge=NO
 - 文件存在且无 marker：
   - `ManagedBlock`：在 EOF 后追加一个 managed block；原 bytes 全部保留。
   - `Fail`：返回 `BLOCKED_EXISTING_FILE`。
-- 文件存在且恰好一个结构合法 block：只有 manifest 记录的 SHA-256 与当前 block bytes 相同才视为 generator-owned；然后可按同一 generator/schema 刷新。
+- 文件存在且恰好一个结构合法 block：只有 manifest 记录的 SHA-256 与当前 block 的规范化逻辑文本哈希相同才视为 generator-owned；然后可按同一 generator/schema 刷新。
 - block 存在但 manifest 缺失：`BLOCKED_UNKNOWN_MANAGED_BLOCK_PROVENANCE`。
 - block hash 与 manifest 不同：`BLOCKED_MANAGED_CONTENT_MODIFIED`。
 - start/end 重复、嵌套、孤立、逆序或 start schema 非 `v1`：`BLOCKED_MANAGED_BLOCK_INVALID`。
@@ -326,9 +326,11 @@ Interactive_Merge=NO
 ### 9.3 Encoding/newline preservation
 
 - 新文件与生成内容：UTF-8 without BOM、LF、末尾一个 LF。
-- 既有入口文件只接受有效 UTF-8（with/without BOM）；BOM 状态保留。
-- 既有文件若只有 CRLF，则插入 block 使用 CRLF；若只有 LF，则使用 LF；mixed newline 返回 `BLOCKED_TEXT_FORMAT_UNSUPPORTED`。
-- block hash 针对 marker 在内、以 canonical LF 表示的逻辑 block计算，避免宿主 newline 差异改变 ownership；实际写入时再转换为宿主 newline。
+- 已存在的 `generated-file` 若含 UTF-8 BOM，按受管内容篡改 fail closed；其 normalized hash 输入始终是不含 BOM 的 UTF-8 字节。
+- 既有入口文件只接受有效 UTF-8（with/without BOM）；宿主文件 BOM 状态保留。宿主 BOM 不作为 Runtime Pack 所有权判断条件，managed block 文本仍按 UTF-8-no-BOM 规范化字节计算哈希。
+- 既有入口文件若只有 LF、CRLF 或 CR，则插入 block 时保留该宿主换行风格；mixed newline 宿主文件返回 `BLOCKED_TEXT_FORMAT_UNSUPPORTED`。这里的宿主写入限制不改变下一条的哈希等价规则。
+- `content_sha256 = SHA-256(UTF-8-no-BOM(CRLF→LF，然后 CR→LF))`。LF、CRLF、CR 以及 mixed newline 的文本只要逻辑字符内容等价，normalized hash 即相等。
+- `managed-block` 的哈希输入仅为包含冻结 start/end marker 的完整 managed block，不包含 block 外人工内容；`generated-file` 的哈希输入为完整受管文本。两者都先执行上述 newline 规范化，再编码为 UTF-8-no-BOM 字节；不得按未经规范化的 raw block bytes 计算。
 
 ### 9.4 Full-generated files
 
@@ -404,7 +406,7 @@ Interactive_Merge=NO
 - `hub.resolved_commit` 是 40 位 lower-case hex。
 - adapter ids 唯一，五项集合必须精确相等，并按 `id` ordinal ascending 排序。
 - adapter path 必须使用 `/`、相对 project root、不得以 `/` 开头、不得含 `.`/`..` segment。
-- `content_sha256` 是 managed block 的 canonical logical bytes 或 generated file full bytes 的 SHA-256 lower hex。
+- `content_sha256` 是第 9.3 节定义的规范化 UTF-8-no-BOM 字节的 SHA-256 lower hex；managed block 仅覆盖含冻结 marker 的 block，generated file 覆盖完整受管文本。
 
 ### 10.3 Paths
 
