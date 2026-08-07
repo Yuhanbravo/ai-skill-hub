@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import subprocess
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -124,6 +125,36 @@ def sha256_bytes(data: bytes) -> str:
 
 def sha256_file(path: Path) -> str:
     return sha256_bytes(path.read_bytes())
+
+
+def read_manifest(project: Path) -> dict:
+    return json.loads((project / ".ai" / "runtime-pack.json").read_text(encoding="utf-8"))
+
+
+def write_manifest(project: Path, manifest: dict) -> None:
+    (project / ".ai" / "runtime-pack.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def legacy_manifest(project: Path) -> dict:
+    manifest = read_manifest(project)
+    for adapter in manifest["adapters"]:
+        adapter.pop("hash_algorithm")
+        adapter.pop("hash_normalization")
+    write_manifest(project, manifest)
+    return manifest
+
+
+def without_adapter_hash_metadata(manifest: dict) -> dict:
+    comparable = deepcopy(manifest)
+    for adapter in comparable["adapters"]:
+        adapter.pop("content_sha256", None)
+        adapter.pop("hash_algorithm", None)
+        adapter.pop("hash_normalization", None)
+    return comparable
 
 
 def snapshot_state(repo: Path, include_mtimes: bool = False) -> dict:
@@ -417,6 +448,178 @@ def test_committed_rerun_no_change(
     assert staged_paths(project, project.parent / "fake-home") == []
 
 
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_normalized_hash_accepts_equivalent_router_newlines(
+    project: Path, hub_remote: dict[str, object], session_env: dict[str, str], newline: str
+) -> None:
+    run_init(project, "-HubUrl", str(hub_remote["url"]))
+    commit_all(project, "add runtime pack", session_env)
+    router = project / ".agents" / "skills" / "ai-skill-hub-router" / "SKILL.md"
+    router.write_bytes(router.read_text(encoding="utf-8").replace("\n", newline).encode("utf-8"))
+    diff = git(project, "diff", "--quiet", env=session_env, check=False)
+    if diff.returncode == 1:
+        commit_all(project, "equivalent router line endings", session_env)
+    elif diff.returncode != 0:
+        raise AssertionError(f"git diff --quiet failed: {diff.stdout} {diff.stderr}")
+    result, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(result, keys, payload, "NO_CHANGE_PROJECT_RUNTIME_PACK_ALREADY_CURRENT", 0)
+
+
+def test_crlf_fresh_clone_rerun_no_change(
+    project: Path, hub_remote: dict[str, object], session_env: dict[str, str]
+) -> None:
+    run_init(project, "-HubUrl", str(hub_remote["url"]))
+    commit_all(project, "add runtime pack", session_env)
+    clone = project.parent / "autocrlf-fresh-clone"
+    subprocess.run(
+        [GIT, "-c", "core.autocrlf=true", "clone", "-q", "--no-local", str(project), str(clone)],
+        check=True, capture_output=True, env=session_env,
+    )
+    git(clone, "config", "core.autocrlf", "true", env=session_env)
+    git(clone, "-c", "protocol.file.allow=always", "submodule", "update", "--init", env=session_env)
+    assert git(clone, "status", "--porcelain", env=session_env).stdout == ""
+    assert git(clone / ".ai" / "ai-skill-hub", "status", "--porcelain", env=session_env).stdout == ""
+    result, keys, payload = run_init(clone, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(result, keys, payload, "NO_CHANGE_PROJECT_RUNTIME_PACK_ALREADY_CURRENT", 0)
+    assert git(clone, "status", "--porcelain", env=session_env).stdout == ""
+
+
+def test_legacy_manifest_crlf_fresh_clone_migrates_and_is_idempotent(
+    project: Path, hub_remote: dict[str, object], session_env: dict[str, str]
+) -> None:
+    run_init(project, "-HubUrl", str(hub_remote["url"]))
+    commit_all(project, "add runtime pack", session_env)
+    legacy = legacy_manifest(project)
+    commit_all(project, "legacy manifest", session_env)
+
+    clone = project.parent / "legacy-autocrlf-fresh-clone"
+    subprocess.run(
+        [
+            GIT,
+            "-c",
+            "core.autocrlf=true",
+            "clone",
+            "-q",
+            "--no-local",
+            str(project),
+            str(clone),
+        ],
+        check=True,
+        capture_output=True,
+        env=session_env,
+    )
+    git(clone, "config", "core.autocrlf", "true", env=session_env)
+    git(
+        clone,
+        "-c",
+        "protocol.file.allow=always",
+        "submodule",
+        "update",
+        "--init",
+        env=session_env,
+    )
+    assert git(clone, "status", "--porcelain", env=session_env).stdout == ""
+    assert git(
+        clone / ".ai" / "ai-skill-hub", "status", "--porcelain", env=session_env
+    ).stdout == ""
+    assert staged_paths(clone, clone.parent / "fresh-clone-home") == []
+
+    result, keys, payload = run_init(clone)
+    assert_decision(result, keys, payload, "PASS_PROJECT_RUNTIME_PACK_INITIALIZED", 0)
+    migrated = read_manifest(clone)
+    assert migrated["hub"] == legacy["hub"]
+    assert without_adapter_hash_metadata(migrated) == without_adapter_hash_metadata(
+        legacy
+    )
+    assert {adapter["hash_algorithm"] for adapter in migrated["adapters"]} == {
+        "sha256"
+    }
+    assert {
+        adapter["hash_normalization"] for adapter in migrated["adapters"]
+    } == {"utf8-lf-v1"}
+    assert staged_paths(clone, clone.parent / "fresh-clone-home") == [
+        ".ai/runtime-pack.json"
+    ]
+
+    commit_all(clone, "migrate hash metadata", session_env)
+    assert git(clone, "status", "--porcelain", env=session_env).stdout == ""
+    assert git(
+        clone / ".ai" / "ai-skill-hub", "status", "--porcelain", env=session_env
+    ).stdout == ""
+    assert staged_paths(clone, clone.parent / "fresh-clone-home") == []
+    rerun, keys, payload = run_init(clone)
+    assert_decision(rerun, keys, payload, "NO_CHANGE_PROJECT_RUNTIME_PACK_ALREADY_CURRENT", 0)
+    assert git(clone, "status", "--porcelain", env=session_env).stdout == ""
+
+
+def test_legacy_manifest_migrates_only_hash_metadata_when_logical_content_matches(
+    project: Path, hub_remote: dict[str, object], session_env: dict[str, str]
+) -> None:
+    run_init(project, "-HubUrl", str(hub_remote["url"]))
+    manifest = legacy_manifest(project)
+    commit_all(project, "legacy manifest", session_env)
+    result, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(result, keys, payload, "PASS_PROJECT_RUNTIME_PACK_INITIALIZED", 0)
+    assert "migrate-hash-normalization:.ai/runtime-pack.json" in payload["Planned_Actions"]
+    upgraded = read_manifest(project)
+    assert without_adapter_hash_metadata(upgraded) == without_adapter_hash_metadata(manifest)
+    assert {adapter["hash_algorithm"] for adapter in upgraded["adapters"]} == {"sha256"}
+    assert {adapter["hash_normalization"] for adapter in upgraded["adapters"]} == {"utf8-lf-v1"}
+    commit_all(project, "migrate hash semantics", session_env)
+    rerun, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(rerun, keys, payload, "NO_CHANGE_PROJECT_RUNTIME_PACK_ALREADY_CURRENT", 0)
+
+
+def test_manifest_migration_preserves_non_default_requested_ref(
+    project: Path, hub_remote: dict[str, object], session_env: dict[str, str]
+) -> None:
+    run_init(
+        project, "-HubUrl", str(hub_remote["url"]), "-HubRef", "v1-light"
+    )
+    before = legacy_manifest(project)
+    commit_all(project, "legacy non-default ref manifest", session_env)
+
+    result, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(result, keys, payload, "PASS_PROJECT_RUNTIME_PACK_INITIALIZED", 0)
+    after = read_manifest(project)
+    assert before["hub"]["requested_ref"] == "v1-light"
+    assert after["hub"]["requested_ref"] == before["hub"]["requested_ref"]
+    commit_all(project, "migrate non-default ref manifest", session_env)
+    rerun, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(rerun, keys, payload, "NO_CHANGE_PROJECT_RUNTIME_PACK_ALREADY_CURRENT", 0)
+
+
+def test_manifest_migration_preserves_explicit_hub_url_when_omitted_on_rerun(
+    project: Path, hub_remote: dict[str, object], session_env: dict[str, str]
+) -> None:
+    explicit_url = str(hub_remote["url"])
+    run_init(project, "-HubUrl", explicit_url)
+    before = legacy_manifest(project)
+    commit_all(project, "legacy explicit URL manifest", session_env)
+
+    result, keys, payload = run_init(project)
+    assert_decision(result, keys, payload, "PASS_PROJECT_RUNTIME_PACK_INITIALIZED", 0)
+    after = read_manifest(project)
+    assert before["hub"]["url"] == explicit_url
+    assert after["hub"]["url"] == before["hub"]["url"]
+    assert payload["Hub_Url"] == before["hub"]["url"]
+    commit_all(project, "migrate explicit URL manifest", session_env)
+    rerun, keys, payload = run_init(project)
+    assert_decision(rerun, keys, payload, "NO_CHANGE_PROJECT_RUNTIME_PACK_ALREADY_CURRENT", 0)
+
+
+def test_normalization_actual_content_tamper_fails_closed(
+    project: Path, hub_remote: dict[str, object], session_env: dict[str, str]
+) -> None:
+    run_init(project, "-HubUrl", str(hub_remote["url"]))
+    commit_all(project, "add runtime pack", session_env)
+    router = project / ".agents" / "skills" / "ai-skill-hub-router" / "SKILL.md"
+    router.write_text(router.read_text(encoding="utf-8").replace("read-only", "write-only", 1), encoding="utf-8", newline="\n")
+    commit_all(project, "tamper router", session_env)
+    result, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(result, keys, payload, "BLOCKED_MANAGED_CONTENT_MODIFIED", 2)
+
+
 # ---------------------------------------------------------------------------
 # 4: DryRun
 # ---------------------------------------------------------------------------
@@ -492,7 +695,7 @@ def test_existing_file_policy_fail(project: Path, hub_remote: dict[str, object])
     assert target.read_bytes() == before
 
 
-def test_modified_managed_block(
+def test_normalization_managed_block_internal_tamper_fails_closed(
     project: Path, hub_remote: dict[str, object], session_env: dict[str, str]
 ) -> None:
     run_init(project, "-HubUrl", str(hub_remote["url"]))
@@ -503,6 +706,25 @@ def test_modified_managed_block(
     commit_all(project, "human edit inside managed block", session_env)
     result, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
     assert_decision(result, keys, payload, "BLOCKED_MANAGED_CONTENT_MODIFIED", 2)
+
+
+def test_normalization_managed_block_external_content_is_preserved(
+    project: Path, hub_remote: dict[str, object], session_env: dict[str, str]
+) -> None:
+    run_init(project, "-HubUrl", str(hub_remote["url"]))
+    commit_all(project, "add runtime pack", session_env)
+    agents = project / "AGENTS.md"
+    outside = "# Human-owned preface\n\n"
+    agents.write_text(
+        outside + agents.read_text(encoding="utf-8"),
+        encoding="utf-8",
+        newline="\n",
+    )
+    commit_all(project, "edit outside managed block", session_env)
+
+    result, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(result, keys, payload, "NO_CHANGE_PROJECT_RUNTIME_PACK_ALREADY_CURRENT", 0)
+    assert agents.read_text(encoding="utf-8").startswith(outside)
 
 
 @pytest.mark.parametrize(
@@ -897,6 +1119,39 @@ def test_manifest_validation_failures(
     assert payload["Manifest_Status"] == "INVALID"
 
 
+@pytest.mark.parametrize(
+    "retained_field",
+    ["hash_algorithm", "hash_normalization"],
+    ids=["hash-algorithm-only", "hash-normalization-only"],
+)
+def test_partial_manifest_hash_metadata_is_rejected_without_mutation(
+    project: Path,
+    hub_remote: dict[str, object],
+    session_env: dict[str, str],
+    retained_field: str,
+) -> None:
+    init_and_commit(project, hub_remote, session_env)
+    manifest = read_manifest(project)
+    removed_field = (
+        "hash_normalization"
+        if retained_field == "hash_algorithm"
+        else "hash_algorithm"
+    )
+    for adapter in manifest["adapters"]:
+        adapter.pop(removed_field)
+    write_manifest(project, manifest)
+    commit_all(project, f"retain only {retained_field}", session_env)
+    manifest_bytes_before = (project / ".ai" / "runtime-pack.json").read_bytes()
+    state_before = snapshot_state(project, include_mtimes=True)
+
+    result, keys, payload = run_init(project, "-HubUrl", str(hub_remote["url"]))
+    assert_decision(result, keys, payload, "BLOCKED_MANIFEST_INVALID", 2)
+    assert payload["Working_Tree_Change"] == "NO"
+    assert payload["Index_Change"] == "NO"
+    assert (project / ".ai" / "runtime-pack.json").read_bytes() == manifest_bytes_before
+    assert snapshot_state(project, include_mtimes=True) == state_before
+
+
 def test_manifest_key_order_failure(
     project: Path, hub_remote: dict[str, object], session_env: dict[str, str]
 ) -> None:
@@ -934,7 +1189,7 @@ def test_manifest_gitlink_mismatch(
     assert_decision(result, keys, payload, "BLOCKED_RUNTIME_PACK_MISMATCH", 2)
 
 
-def test_requested_commit_requires_upgrade(
+def test_manifest_commit_pin_regression_requested_commit_requires_upgrade(
     project: Path, hub_remote: dict[str, object], session_env: dict[str, str]
 ) -> None:
     init_and_commit(project, hub_remote, session_env)
@@ -1379,12 +1634,16 @@ def test_output_contract_on_blocking(tmp_path: Path, hub_remote: dict[str, objec
 def validate_against_schema(instance, schema, path: str = "$") -> list[str]:
     errors: list[str] = []
     expected_type = schema.get("type")
+    if "required" in schema:
+        if not isinstance(instance, dict):
+            errors.append(f"{path}: required applies to an object")
+        else:
+            for key in schema["required"]:
+                if key not in instance:
+                    errors.append(f"{path}: missing required '{key}'")
     if expected_type == "object":
         if not isinstance(instance, dict):
             return [f"{path}: expected object"]
-        for key in schema.get("required", []):
-            if key not in instance:
-                errors.append(f"{path}: missing required '{key}'")
         if schema.get("additionalProperties") is False:
             allowed = set(schema.get("properties", {}))
             for key in instance:
@@ -1407,14 +1666,22 @@ def validate_against_schema(instance, schema, path: str = "$") -> list[str]:
             return [f"{path}: expected string"]
         if "minLength" in schema and len(instance) < schema["minLength"]:
             errors.append(f"{path}: too short")
-        if "pattern" in schema and not re.search(schema["pattern"], instance):
+    if "pattern" in schema and isinstance(instance, str):
+        if not re.search(schema["pattern"], instance):
             errors.append(f"{path}: pattern mismatch")
-        if "not" in schema and "pattern" in schema["not"] and re.search(schema["not"]["pattern"], instance):
-            errors.append(f"{path}: forbidden pattern matched")
     if "const" in schema and instance != schema["const"]:
         errors.append(f"{path}: expected const {schema['const']!r}")
     if "enum" in schema and instance not in schema["enum"]:
         errors.append(f"{path}: not in enum")
+    if "anyOf" in schema:
+        branch_errors = [
+            validate_against_schema(instance, branch, path)
+            for branch in schema["anyOf"]
+        ]
+        if all(branch for branch in branch_errors):
+            errors.append(f"{path}: no anyOf branch matched")
+    if "not" in schema and not validate_against_schema(instance, schema["not"], path):
+        errors.append(f"{path}: forbidden schema matched")
     return errors
 
 
@@ -1454,6 +1721,20 @@ def test_schema_validates_golden_manifests(
     corrupted = json.loads(json.dumps(submodule_manifest))
     corrupted["adapters"][0]["id"] = "other-id"
     assert validate_against_schema(corrupted, schema) != []
+
+    legacy = deepcopy(submodule_manifest)
+    for adapter in legacy["adapters"]:
+        adapter.pop("hash_algorithm")
+        adapter.pop("hash_normalization")
+    assert validate_against_schema(legacy, schema) == []
+
+    algorithm_only = deepcopy(submodule_manifest)
+    algorithm_only["adapters"][0].pop("hash_normalization")
+    assert validate_against_schema(algorithm_only, schema) != []
+
+    normalization_only = deepcopy(submodule_manifest)
+    normalization_only["adapters"][0].pop("hash_algorithm")
+    assert validate_against_schema(normalization_only, schema) != []
 
 
 # ---------------------------------------------------------------------------
