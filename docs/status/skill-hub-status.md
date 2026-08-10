@@ -1,11 +1,11 @@
 # Skill Hub Status
 
-- Updated at: `2026-08-06`
+- Updated at: `2026-08-10`
 - Scope: `ai-skill-hub`
 - Method: `system-status-update` wrapper over `update-project-status`
 - Config: `.codex/skill-config/update-project-status.json`
-- Data sources: Git history through current observed `origin/main` HEAD `3919677`, working tree, `skills/`, `.agents/`, `.github/`, `tools/`, `docs/status/`, `docs/HANDOFF.md`, the Codex User Skills Bootstrap V1 Stage D closure report, the real-host Check evidence, and the Project Runtime Pack MVP V1 implementation / remediation / final closure reports.
-- Note: this refresh (`2026-08-06`) is a bounded, docs-only status addition for the Project Runtime Pack MVP V1 remote publication and final closure. It does not reopen or rewrite any other status line; existing observed `origin/main` facts recorded on earlier dates remain historical.
+- Data sources: Git history through current observed `main` / `origin/main` HEAD `b42c13e1c5be661bf3933b516775feff4a0d3a53`, working tree, `skills/`, `.agents/`, `.github/`, `tools/`, `docs/status/`, `docs/HANDOFF.md`, historical Consumer Adoption Pilot evidence, and the Project Runtime Pack MVP V1 closure records.
+- Note: this refresh (`2026-08-10`) freezes Consumer Adoption Architecture V1 and closes the legacy pilot / standalone discovery program without rewriting historical pilot evidence as a complete pass.
 
 ## Project Runtime Pack MVP V1
 
@@ -20,7 +20,7 @@
 - Findings: F-01 ~ F-07, F-09 `CLOSED`; F-08 `CLOSED_TEST_HARDENED`; F-10 ~ F-15 `DEFERRED_NONBLOCKING_V1_NOTE` (substance preserved in the final closure report).
 - Known notes (not hidden): pre-existing `codex-user-skills-bootstrap` MAX_PATH baseline (`smoke` 7/8, `all` 9/10; not introduced or expanded by this work item); Copilot workspace-root authenticated fresh-conversation E2E not literally verified (routing chain verified by real-artifact walkthrough plus Codex/Kimi cross-check; native Skill picker registration non-blocking); Claude Code authenticated E2E not performed (non-blocking); `file://` local fixture requires `protocol.file.allow=always` under current Git security defaults (local test fixture limitation only).
 - Artifacts: `tools/init_project_runtime_pack.ps1`, `tools/project_runtime_pack_schema_v1.json`, `tests/test_init_project_runtime_pack.py`, and the task records in `tasks/`.
-- Deferred next actions (future independent work items only): optional authenticated Copilot workspace-root verification; optional Claude Code authenticated E2E; separate MAX_PATH baseline remediation; deferred minor hardening for F-10 ~ F-15; consumer-project pilot using the finalized Runtime Pack.
+- Deferred next actions (future independent work items only): optional authenticated Copilot workspace-root verification; optional Claude Code authenticated E2E; separate MAX_PATH baseline remediation; deferred minor hardening for F-10 ~ F-15. The former consumer-project-pilot action is superseded by Consumer Adoption Architecture V1.
 
 ```text
 Project_Runtime_Pack_MVP_V1=
@@ -62,44 +62,89 @@ Current_Implementation_HEAD=
 - Codex App E2E: `PASS`.
 - Host E2E: `FULLY_CLOSED`.
 - Idempotency, shared protocol use, `.system` protection, ownership-manifest validity, and repository integrity: `PASS`.
-- Consumer-repository migration: `NOT_AUTHORIZED`; the first adoption pilot is tracked separately below.
+- Bulk consumer-repository migration: `NOT_AUTHORIZED`; bounded migration-on-demand is governed by Consumer Adoption Architecture V1 below.
 - Closure evidence: `docs/dogfood/codex_user_skills_bootstrap_v1_real_installation_and_host_e2e_report.md`.
 
-## Consumer Repository Adoption Pilot
+## Consumer Adoption Architecture V1
 
-- Codex User Skills Program: `CONSUMER_ADOPTION_PILOT`.
-- Pilot repository: `Derivative_Data`.
-- Current authorized action: `READ_ONLY_ADOPTION_AUDIT`.
-- Expected pilot output: `CONSUMER_ADOPTION_DECISION` and `TASK_PACKAGE_IF_CHANGE_REQUIRED`.
-- `Derivative_Data` pilot completed: `FALSE`.
-- Pilot implementation: `NOT_AUTHORIZED`.
-- Other repository rollout: `NOT_AUTHORIZED`.
-- Consumer Adoption Pattern V1: `NOT_YET_FROZEN`.
-- User Installed Bundle V1: `workflow-bootstrap`, `chatgpt-handoff-pilot`, `_protocol`.
-- System wrapper user installation: `NOT_INCLUDED_IN_BUNDLE_V1`; `system-handoff`, `system-status-update`, and `system-takeover` are not represented as installed Bundle V1 entries.
+- Architecture: `FROZEN`; primary adoption mode: `AI_LEVEL_CONFIG_BACK_REFERENCE`.
+- `ai-skill-hub`: `CANONICAL_CAPABILITY_SSOT` for generic canonical capability, skill implementation, tests, version, and publication.
+- AI-level project configuration: primary Consumer -> Hub discovery and back-reference entry.
+- Consumer repositories: do not copy generic canonical skill payload; continue to own project-specific AGENTS, governance, business rules, task packages, validation, status, handoff, and evidence.
+- Future onboarding: one `LIGHTWEIGHT_PREFLIGHT`; default validation is one minimal routing smoke.
+- Repository migration: `ON_DEMAND_ONLY`, limited to observed project-local legacy debt.
+- Bulk consumer migration: `NOT_AUTHORIZED`; Hub product remediation: `DEFECT_DRIVEN_ONLY`.
+- Standalone Consumer Repository Discovery Program: `CLOSED_AS_STANDALONE_PROGRAM`.
+- Consumer adoption is not a standalone large governance program for each repository.
+- User Installed Bundle V1 remains `workflow-bootstrap`, `chatgpt-handoff-pilot`, `_protocol`; system wrapper user installation remains `NOT_INCLUDED_IN_BUNDLE_V1`.
+
+### Historical `Derivative_Data` Pilot Evidence
+
+- Legacy pilot status: `CLOSED_SUPERSEDED_BY_AI_LEVEL_BACK_REFERENCE_ADOPTION_ARCHITECTURE`, not failed.
+- A1R: `PRESERVED_HISTORICAL_PASS`.
+- A2 CLI: `PRESERVED_HISTORICAL_PASS_WITH_NOTES`.
+- Observed compatibility debt: stale or absent project-relative `.codex/skills` references in project guidance / wrapper surfaces.
+- Historical provisional direction: `MIGRATE_PROJECT_RELATIVE_REFERENCES`, applicable only to the observed `Derivative_Data` debt; not a universal requirement, default migration policy, or rollout authorization.
+- A2 App: `NOT_COMPLETED_AND_NO_LONGER_REQUIRED_FOR_ARCHITECTURE_CLOSURE`.
+
+### Lightweight Adoption Preflight
+
+1. Confirm the AI-level config exists and correctly points back to the Hub.
+2. Confirm the Consumer Repository does not copy generic canonical skill payload.
+3. Check for concrete legacy debt: `.codex/skills/**`, a repo-local generic skill copy, a broken wrapper, or an absolute host path.
+4. Confirm project-specific governance and business rules remain project-local.
+5. Run one minimal routing smoke.
+
+Allowed outputs only:
+
+- `ADOPT_AS_IS`: no Consumer Repository change is required; close onboarding directly.
+- `MIGRATION_REQUIRED`: create a minimal project-local migration only for observed legacy debt.
+- `BLOCKED`: a reproducible technical issue requires ASH assessment for a possible common Hub product defect.
+
+Any migration must be `PROJECT_LOCAL`, `BOUNDED`, `CHANGED_PATH_ALLOWLIST`, and `INDEPENDENTLY_REVIEWED`. It may address only broken project-relative skill references, a legacy wrapper, the AI-level config / project-governance entry, and directly related explanation. It must not copy canonical skill payload, create a repo-local generic skill fork, hard-code a host installation path, modify business code or data logic, or touch other Consumer Repositories.
 
 ```text
-Codex_User_Skills_Program=
-CONSUMER_ADOPTION_PILOT
+Consumer_Adoption_Architecture_V1=
+FROZEN
 
-Pilot_Repository=
-Derivative_Data
+Primary_Adoption_Mode=
+AI_LEVEL_CONFIG_BACK_REFERENCE
 
-Current_Authorized_Action=
-READ_ONLY_ADOPTION_AUDIT
+ai-skill-hub=
+CANONICAL_CAPABILITY_SSOT
 
-Expected_Pilot_Output=
-CONSUMER_ADOPTION_DECISION
-TASK_PACKAGE_IF_CHANGE_REQUIRED
+AI_Level_Project_Config=
+PRIMARY_CONSUMER_TO_HUB_DISCOVERY_AND_BACK_REFERENCE_ENTRY
 
-Derivative_Data_Pilot_Completed=
-FALSE
+Consumer_Repository=
+PROJECT_SPECIFIC_GOVERNANCE_BUSINESS_RULES_TASK_PACKAGES_VALIDATION_STATUS_HANDOFF_EVIDENCE
 
-Consumer_Adoption_Pattern_V1=
-NOT_YET_FROZEN
+Derivative_Data_Legacy_Consumer_Pilot=
+CLOSED_SUPERSEDED_BY_AI_LEVEL_BACK_REFERENCE_ADOPTION_ARCHITECTURE
 
-Other_Repository_Rollout=
+A1R=
+PRESERVED_HISTORICAL_PASS
+
+A2_CLI=
+PRESERVED_HISTORICAL_PASS_WITH_NOTES
+
+A2_APP=
+NOT_COMPLETED_AND_NO_LONGER_REQUIRED_FOR_ARCHITECTURE_CLOSURE
+
+Consumer_Repository_Discovery_Program=
+CLOSED_AS_STANDALONE_PROGRAM
+
+Future_Consumer_Onboarding=
+LIGHTWEIGHT_PREFLIGHT
+
+Repository_Migration=
+ON_DEMAND_ONLY
+
+Bulk_Consumer_Migration=
 NOT_AUTHORIZED
+
+Hub_Product_Remediation=
+DEFECT_DRIVEN_ONLY
 ```
 
 ## Layer Status
@@ -186,22 +231,23 @@ NOT_AUTHORIZED
 
 - Overall maturity: `evolving`
 - Stable: canonical ownership in `skills/`, thin adapter / wrapper discipline, status-first linked refresh ordering, and handoff phase consistency.
-- Stable boundary: this round is a docs-only consumer adoption pilot status refresh; it does not authorize implementation or change runtime tools.
+- Stable boundary: this round is a docs-only Consumer Adoption Architecture V1 freeze; it does not authorize implementation or change runtime tools.
 - Stable boundary: this round does not modify adapters, `.agents/skills/*`, GitHub entrypoints, `.github/workflows/*`, tools, tests, skill examples, prompt bodies, templates, protocols, registry/index files, or other skills.
 - Stable boundary: `workflow-bootstrap` owns project-level orchestration; `system-status-update` owns system-level status-first linked refresh; `system-handoff` owns handoff receiver / output boundary; `financial-data-project-migration` keeps assessment and execution separated, with templates representing generated-output structure rather than skill behavior.
-- Not yet stable: the Consumer Adoption Pattern V1 is not frozen, the `Derivative_Data` pilot is not complete, and P2 planning / backlog selection has not started.
+- Stable: Consumer Adoption Architecture V1 is frozen around AI-level config back-reference, lightweight preflight, migration-on-demand, and defect-driven Hub remediation.
 
 ## Risks / Gaps
 
-- Keep the `Derivative_Data` pilot read-only and limited to adoption audit and governance planning.
-- Do not treat the pilot as completed, freeze a Consumer Adoption Pattern V1, or authorize consumer-repository implementation.
-- Do not authorize rollout to other consumer repositories.
+- Preserve the historical A1R / A2 CLI / A2 App facts; do not recast the superseded pilot as failed or manufacture a complete historical pass.
+- Do not retain A2 App rerun as an architecture-closure requirement.
+- Do not generalize `MIGRATE_PROJECT_RELATIVE_REFERENCES` beyond the compatibility debt observed in `Derivative_Data`.
+- Do not authorize bulk migration, preventive repository migration, or speculative Hub remediation.
 - Do not drift into `.agents` wrapper changes, workflow changes, registry/index/tools changes, prompt body / protocol changes, or large skill restructuring.
 - Bridge mirror files, if updated in this closeout, must remain semantic mirrors of the active HANDOFF/status facts and must not become current-state SSOT.
 
 ## Recommended Next Steps
 
-1. Run the read-only adoption audit and governance planning for `Derivative_Data`.
-2. Produce a `CONSUMER_ADOPTION_DECISION` and a bounded task package only if a change is required.
-3. Keep pilot implementation and other consumer-repository rollout unauthorized until separately approved.
-4. Keep Consumer Adoption Pattern V1 unfrozen and preserve the current Bundle V1 boundary.
+1. For the next formal consumer onboarding, run only the five-check lightweight preflight.
+2. Close as `ADOPT_AS_IS`, or create a bounded project-local migration only when concrete legacy debt is observed.
+3. Return `BLOCKED` to ASH only for a reproducible technical issue that may be a common Hub product defect.
+4. Keep bulk migration, preventive rollout, and speculative Hub capability work unauthorized.

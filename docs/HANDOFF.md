@@ -38,6 +38,7 @@ This file is the single source of truth for project handoff.
 - 2026-07-27: Recorded the transition from the closed Codex User Skills Bootstrap V1 to the consumer-repository adoption pilot. `PJT_Derivative_Data` is the first pilot and is authorized only for read-only adoption audit and governance planning; implementation and broader rollout remain unauthorized. This also records the actual user-level Bundle V1 boundary and that `system-handoff` is not included in Bundle V1.
 - 2026-08-06: Refreshed system status first (`docs/status/skill-hub-status.md`, Updated at `2026-08-06`) and then merged the completed Project Runtime Pack MVP V1 local final closure into handoff context. This records `ASH-PROJECT-RUNTIME-PACK-MVP-V1` as `CLOSED_LOCAL_ONLY_WITH_NOTES` with decision `PASS_WITH_NOTES_PROJECT_RUNTIME_PACK_MVP_V1_LOCAL_FINAL_CLOSURE`; preserves the commit chain (`d4d735e0` design / `7c8e54c` implementation / `1f01ab2` remediation) and the remediation and heterogeneous revalidation evidence (112 passed x 3, 20/20 submodule rollback, 20/20 concurrency, Codex/Kimi E2E PASS); preserves the pre-existing `codex-user-skills-bootstrap` MAX_PATH baseline note, the Copilot workspace-root and Claude authenticated E2E non-verified notes, the deferred F-10 ~ F-15 notes with substance, and the `file://` fixture restriction; and leaves remote publication for separate authorization while preserving `Phase 3 - Controlled System` and all existing hard boundaries.
 - 2026-08-06: Refreshed system status first (`docs/status/skill-hub-status.md`, Updated at `2026-08-06`) and then merged the completed Project Runtime Pack MVP V1 remote publication into handoff context. This records `ASH-PROJECT-RUNTIME-PACK-MVP-V1` as `CLOSED_REMOTE_PUBLISHED_WITH_NOTES` with decision `PASS_WITH_NOTES_PROJECT_RUNTIME_PACK_MVP_V1_REMOTE_PUBLICATION_AND_FINAL_CLOSURE`; the local closure commit `4e3366c3...` was safely published to the authoritative remote `gitea-nas:yuhanbravo/ai-skill-hub.git` with no force push, and post-push local `main` == `origin/main` == actual remote `4e3366c3...` with ahead/behind `0 0`; all preserved notes (MAX_PATH baseline, Copilot workspace-root and Claude authenticated E2E, deferred F-10 ~ F-15 with substance, `file://` fixture restriction) remain in force, recorded in `tasks/project_runtime_pack_mvp_v1_remote_publication_report.md`; the next action is the consumer-project pilot, while preserving `Phase 3 - Controlled System` and all existing hard boundaries.
+- 2026-08-10: Froze Consumer Adoption Architecture V1 as `AI_LEVEL_CONFIG_BACK_REFERENCE`, closed the standalone Consumer Repository Discovery Program, and closed the legacy `Derivative_Data` pilot as `CLOSED_SUPERSEDED_BY_AI_LEVEL_BACK_REFERENCE_ADOPTION_ARCHITECTURE`. Historical A1R and A2 CLI evidence remains preserved; A2 App remains not completed but is no longer required for architecture closure. No consumer migration, bulk rollout, or Hub product change was authorized.
 
 ## Current Status
 
@@ -49,33 +50,59 @@ As of the `2026-07-27` status baseline, current observed `origin/main` HEAD is `
 
 As of `2026-07-27`, Codex User Skills Bootstrap V1 is closed through a real-installation and host E2E evidence pass. The implementation baseline is `f57ae3e9d89fb3432fbb8b7c572042b69f6fcc58`; the installed `workflow-bootstrap`, `chatgpt-handoff-pilot`, and `_protocol` entries are current and fingerprint-consistent; CLI and Codex App discovery passed; and the closure evidence is recorded in `docs/dogfood/codex_user_skills_bootstrap_v1_real_installation_and_host_e2e_report.md`. This is a local installation closure, not consumer-repository migration, distribution readiness, or authorization to merge the docs branch to `main`.
 
-Current program stage is `CONSUMER_REPOSITORY_ADOPTION_PILOT`. The first consumer adoption pilot is `PJT_Derivative_Data`, targeting `D:\dev\Derivative_Data`. The current authorized stage is `READ_ONLY_ADOPTION_AUDIT_AND_GOVERNANCE_PLANNING`; pilot implementation is `NOT_AUTHORIZED`, and rollout to other consumer repositories is `NOT_AUTHORIZED`. The pilot is authorized but not completed, and the consumer adoption pattern remains unvalidated.
+Consumer Adoption Architecture V1 is now `FROZEN`. The primary adoption mode is `AI_LEVEL_CONFIG_BACK_REFERENCE`: AI-level project configuration is the primary Consumer -> Hub discovery and back-reference entry, and `ai-skill-hub` remains the canonical capability SSOT for generic skill implementation, tests, versions, and publication. Consumer repositories do not copy generic canonical skill payload; they continue to own project-specific AGENTS, governance and business boundaries, task packages, validation, status, handoff, and evidence.
 
-User-level Bundle V1 currently consists only of `workflow-bootstrap`, `chatgpt-handoff-pilot`, and `_protocol`. The hub still contains system-wrapper capabilities such as `system-handoff`, `system-status-update`, and `system-takeover`, but there is no evidence that they were installed as user-level Bundle V1 skills; `system-handoff` is `NOT_INCLUDED_IN_BUNDLE_V1`. Any user-level bundle adjustment is separate future governance and is not part of the `Derivative_Data` pilot.
+The legacy `Derivative_Data` Consumer Adoption Pilot is `CLOSED_SUPERSEDED_BY_AI_LEVEL_BACK_REFERENCE_ADOPTION_ARCHITECTURE`, not failed. Its historical evidence remains explicit: A1R `PASS`; A2 CLI `PASS_WITH_NOTES`; observed compatibility debt behind the provisional `MIGRATE_PROJECT_RELATIVE_REFERENCES` direction; and A2 App `NOT_COMPLETED_AND_NO_LONGER_REQUIRED_FOR_ARCHITECTURE_CLOSURE`. That provisional migration direction applies only to the debt observed in `Derivative_Data`; it is not a universal consumer requirement, default migration policy, or bulk-rollout authorization. The standalone Consumer Repository Discovery Program is closed.
 
-Project Runtime Pack MVP V1 (`ASH-PROJECT-RUNTIME-PACK-MVP-V1`) is closed and remotely published at `4e3366c3...` (design `d4d735e0`, implementation `7c8e54c`, remediation `1f01ab2`). The initializer, schema, and focused test suite landed locally; remediation and heterogeneous revalidation passed with notes; the local closure commit was safely published to the authoritative remote `gitea-nas:yuhanbravo/ai-skill-hub.git` without force push, and the work item is recorded as `CLOSED_REMOTE_PUBLISHED_WITH_NOTES` with decision `PASS_WITH_NOTES_PROJECT_RUNTIME_PACK_MVP_V1_REMOTE_PUBLICATION_AND_FINAL_CLOSURE`. Known notes are preserved and not hidden: the pre-existing `codex-user-skills-bootstrap` MAX_PATH baseline issue, Copilot workspace-root authenticated E2E not literally verified, Claude Code authenticated E2E not performed, deferred F-10 ~ F-15 with substance, and the `file://` local fixture restriction — all recorded in `tasks/project_runtime_pack_mvp_v1_final_closure_report.md` and `tasks/project_runtime_pack_mvp_v1_remote_publication_report.md`. This closure adds no rollout, distribution, adoption, or consumer-repository authorization; the next action is the consumer-project pilot.
+User-level Bundle V1 currently consists only of `workflow-bootstrap`, `chatgpt-handoff-pilot`, and `_protocol`. The hub still contains system-wrapper capabilities such as `system-handoff`, `system-status-update`, and `system-takeover`, but there is no evidence that they were installed as user-level Bundle V1 skills; `system-handoff` is `NOT_INCLUDED_IN_BUNDLE_V1`. Any user-level bundle adjustment remains separate future governance and is not authorized by Consumer Adoption Architecture V1.
+
+Project Runtime Pack MVP V1 (`ASH-PROJECT-RUNTIME-PACK-MVP-V1`) is closed and remotely published at `4e3366c3...` (design `d4d735e0`, implementation `7c8e54c`, remediation `1f01ab2`). The initializer, schema, and focused test suite landed locally; remediation and heterogeneous revalidation passed with notes; the local closure commit was safely published to the authoritative remote `gitea-nas:yuhanbravo/ai-skill-hub.git` without force push, and the work item is recorded as `CLOSED_REMOTE_PUBLISHED_WITH_NOTES` with decision `PASS_WITH_NOTES_PROJECT_RUNTIME_PACK_MVP_V1_REMOTE_PUBLICATION_AND_FINAL_CLOSURE`. Known notes are preserved and not hidden: the pre-existing `codex-user-skills-bootstrap` MAX_PATH baseline issue, Copilot workspace-root authenticated E2E not literally verified, Claude Code authenticated E2E not performed, deferred F-10 ~ F-15 with substance, and the `file://` local fixture restriction — all recorded in `tasks/project_runtime_pack_mvp_v1_final_closure_report.md` and `tasks/project_runtime_pack_mvp_v1_remote_publication_report.md`. This closure added no rollout, distribution, adoption, or consumer-repository authorization; its historical consumer-pilot next action is superseded by the frozen architecture recorded above.
 
 ```text
-Current_Program_Stage=
-CONSUMER_REPOSITORY_ADOPTION_PILOT
+Consumer_Adoption_Architecture_V1=
+FROZEN
+
+Primary_Adoption_Mode=
+AI_LEVEL_CONFIG_BACK_REFERENCE
+
+ai-skill-hub=
+CANONICAL_CAPABILITY_SSOT
+
+AI_Level_Project_Config=
+PRIMARY_CONSUMER_TO_HUB_DISCOVERY_AND_BACK_REFERENCE_ENTRY
+
+Consumer_Repository=
+PROJECT_SPECIFIC_GOVERNANCE_BUSINESS_RULES_TASK_PACKAGES_VALIDATION_STATUS_HANDOFF_EVIDENCE
 
 Bootstrap_V1=
 FULLY_CLOSED
 
-First_Consumer_Adoption_Pilot=
-PJT_Derivative_Data
+Derivative_Data_Legacy_Consumer_Pilot=
+CLOSED_SUPERSEDED_BY_AI_LEVEL_BACK_REFERENCE_ADOPTION_ARCHITECTURE
 
-Pilot_Repository=
-D:\dev\Derivative_Data
+A1R=
+PRESERVED_HISTORICAL_PASS
 
-Pilot_Current_Status=
-AUTHORIZED_FOR_READ_ONLY_ADOPTION_AUDIT_AND_GOVERNANCE_PLANNING
+A2_CLI=
+PRESERVED_HISTORICAL_PASS_WITH_NOTES
 
-Pilot_Implementation=
+A2_APP=
+NOT_COMPLETED_AND_NO_LONGER_REQUIRED_FOR_ARCHITECTURE_CLOSURE
+
+Consumer_Repository_Discovery_Program=
+CLOSED_AS_STANDALONE_PROGRAM
+
+Future_Consumer_Onboarding=
+LIGHTWEIGHT_PREFLIGHT
+
+Repository_Migration=
+ON_DEMAND_ONLY
+
+Bulk_Consumer_Migration=
 NOT_AUTHORIZED
 
-Other_Consumer_Repository_Rollout=
-NOT_AUTHORIZED
+Hub_Product_Remediation=
+DEFECT_DRIVEN_ONLY
 
 User_Installed_Bundle_V1=
 workflow-bootstrap
@@ -88,6 +115,10 @@ NOT_INCLUDED_IN_BUNDLE_V1
 System_Handoff_User_Bundle_State=
 NOT_INCLUDED_IN_BUNDLE_V1
 ```
+
+Future onboarding uses one lightweight adoption preflight only: (1) confirm the AI-level config exists and correctly points back to the Hub; (2) confirm the consumer does not copy generic canonical skill payload; (3) check for concrete legacy debt limited to `.codex/skills/**`, repo-local generic skill copies, broken wrappers, or absolute host paths; (4) confirm project-specific governance and business rules remain local; and (5) run one minimal routing smoke. Its only outcomes are `ADOPT_AS_IS`, `MIGRATION_REQUIRED`, or `BLOCKED`.
+
+`ADOPT_AS_IS` closes onboarding without a consumer-repository change. `MIGRATION_REQUIRED` permits only a minimal project-local migration for observed debt. `BLOCKED` requires a reproducible technical issue and a return to ASH to determine whether it is a common Hub product defect. Any migration must be `PROJECT_LOCAL`, `BOUNDED`, `CHANGED_PATH_ALLOWLIST`, and `INDEPENDENTLY_REVIEWED`; it may address only broken project-relative skill references, legacy wrappers, the AI-level config / project-governance entry, and directly related explanation. Migration remains on demand, and remediation remains defect driven.
 
 P1 examples coverage completed in three merged rounds: P1-A expanded `chatgpt-handoff-pilot` invocation examples in PR #15 at `8a734ff`; P1-B expanded `project-takeover` invocation examples in PR #16 at `ae97ab4` and tightened limited-scope / scoped-reuse wording before merge; P1-C expanded `skill-governance` invocation examples in PR #17 at `fd6cf10`, including the follow-up Skill Refactor boundary tightening after Codex review. P1-C also clarified the batch evaluator as read-only sequential evaluation, not batch rewrite.
 
@@ -123,9 +154,10 @@ The P1 closeout records PR #15, PR #16, and PR #17 as merged evidence for P1 exa
 - `system-status-update` and `system-handoff` must remain wrapper skills. They may reuse canonical skills and add system-level output constraints, but they must not fork canonical logic.
 - Workspace-aware or no-git status refresh extends evidence collection only. It must not promote workspace signals, bridge copies, readable derivatives, or other convenience surfaces into new authoritative system sources.
 - `system-status-update` and `system-handoff` coordination must remain minimal: refresh status first, then merge handoff; keep a `14`-day freshness gate and phase consistency check, but do not introduce auto-trigger orchestration.
-- In distributed business-project contexts, `.codex/skills/` is the runtime SSOT for local skill content. Project-local adapters must point to `.codex/skills/`, not back to hub `skills/` paths.
+- `ai-skill-hub` is the SSOT for generic canonical capability and skill payload. Consumer repositories must not copy generic canonical payload; AI-level project configuration provides the primary discovery and back-reference entry, while project-specific governance and business rules remain local.
 - `workflow-bootstrap` Phase 0-3 baseline guidance must remain canonical guidance only. It must not be presented as completed Phase 4 multi-project pilot work, distribution readiness, or authorization to expand the project-side file family by default.
-- The `PJT_Derivative_Data` consumer adoption pilot is limited to read-only adoption audit and governance planning. No pilot implementation, user-level Bundle V1 change, Consumer Adoption Pattern V1 freeze, or rollout to another consumer repository is authorized.
+- The legacy `Derivative_Data` pilot is closed as superseded, not failed. Its incomplete A2 App evidence must remain visible but must not be retained as an architecture-closure requirement.
+- Consumer migration is on demand only. No bulk consumer migration, preventive rollout, repo-local generic skill fork, hard-coded host installation path, business-code change, or speculative Hub capability work is authorized.
 - `workflow-bootstrap` owns workflow shell, role split, runtime profile, review tier guidance, and runtime pack manifest guidance. `chatgpt-handoff-pilot` owns task package, bounded execution, and execution report protocols.
 - `workflow-bootstrap` is the project-level orchestration owner for dual-refresh and GitHub PR bootstrap prompting. It must not absorb `system-status-update`, `system-handoff`, or `chatgpt-handoff-pilot` protocol ownership.
 - `system-status-update` owns system-level status-first linked refresh and the concise status baseline used by handoff.
@@ -211,11 +243,11 @@ The P1 closeout records PR #15, PR #16, and PR #17 as merged evidence for P1 exa
 - No broader project-side runtime-pack family rollout beyond thin-entry guidance; `.github/instructions/*.instructions.md` and `.github/agents/*.agent.md` remain unimplemented and out of default scope.
 - No distinct project-local canonical payload artifact exists yet in the current repo; the controlled placeholder remains intentionally unresolved until a maintainer-confirmed artifact actually appears.
 - No complete validation yet across multiple project types; Round 1 covered Git-first and non-git / low-git candidates as read-only evidence, but a follow-up should specifically close the Git-first evidence gap before any broader portability claim.
-- The consumer adoption pilot is authorized only for read-only audit and governance planning; no implementation, broader rollout, or frozen Consumer Adoption Pattern V1 exists yet.
+- The legacy consumer adoption pilot and standalone discovery program are closed by the frozen AI-level back-reference architecture; historical evidence remains preserved rather than rewritten as a complete pass.
 - No refresh of `skills_index.json` in this workflow-bootstrap pass; that deferral is intentional because the current generation chain would also rewrite `.agents/skills/*.md` flat summaries and widen the bounded-execution scope.
 - No expansion of local validation and check tooling into an automated distribution, rollout, or execution framework; the repository still treats those tools as repeatable local support surfaces rather than a stronger controller layer.
 - No `tool_adapters/`, validators / automation / CI, `.github/instructions/`, `.github/agents/`, Phase 5 tool adapter candidates, or Phase 6 validator / automation preflight work has started.
-- No consumer-repository implementation or broader distribution / rollout has started; the current `Derivative_Data` pilot remains limited to read-only adoption audit and governance planning.
+- No bulk consumer migration or preventive repository migration is authorized; future project-local migration begins only after the lightweight preflight observes concrete legacy debt.
 - No automation, validators, CI, router / pipeline integration, broader scoring rollout, or auto-remediation was added for the shared assessment output protocol.
 - No mandatory `maturity_score` policy exists for status / handoff skills; scoring remains optional / where applicable.
 - No validator / CI / automation escalation is justified by the P1.5 dogfood alone; cross-executor consistency should be observed through future real outputs first.
@@ -229,7 +261,7 @@ These gaps are intentional to keep the system legible while distribution and gov
 
 ## Next Phase Direction
 
-The immediate program direction is the `CONSUMER_REPOSITORY_ADOPTION_PILOT`, beginning with the `PJT_Derivative_Data` read-only adoption audit and governance planning. The expected output is a `CONSUMER_ADOPTION_DECISION` and, only if a change is required, a bounded task package. Pilot implementation, broader rollout, and a frozen Consumer Adoption Pattern V1 remain unauthorized or pending validation.
+Consumer adoption now follows the frozen `AI_LEVEL_CONFIG_BACK_REFERENCE` architecture. Future consumers run the five-check lightweight preflight and close as `ADOPT_AS_IS`, `MIGRATION_REQUIRED`, or `BLOCKED`; repository migration is created only for observed project-local debt, and Hub remediation begins only from a reproducible defect.
 
 The workflow-bootstrap line's separate next direction remains Phase 4 Round 2 planning focused on the Git-first evidence gap from Round 1. It should use a separately reviewed task package or explicit maintainer-provided Git evidence, not direct implementation.
 
@@ -247,14 +279,14 @@ Documentation maintenance should treat HANDOFF/status as the current-state SSOT 
 
 Documentation follow-up should prioritize dogfooding and maintenance discipline for the new catalog/registry indexes (for example, using them during the next real skill change and observing upkeep friction) before considering candidate-promotion protocol work, validators, or automation.
 
-The separate workflow-bootstrap line remains closed after P1 and must not expand P1; any P2 work should begin as a separate planning / backlog-selection round with its own reviewed task package, starting from read-only inventory and explicit scope boundaries. The current program direction is the read-only Consumer Adoption Pilot recorded above.
+The separate workflow-bootstrap line remains closed after P1 and must not expand P1; any P2 work should begin as a separate planning / backlog-selection round with its own reviewed task package, starting from read-only inventory and explicit scope boundaries. Consumer adoption is no longer a standalone large governance program per repository.
 
 ## Recommended Next Actions
 
-1. Execute the authorized read-only adoption audit and governance planning for `PJT_Derivative_Data`.
-2. Return a `CONSUMER_ADOPTION_DECISION` and create a bounded task package only if a change is required.
-3. Keep pilot implementation and other consumer-repository rollout unauthorized until separately approved.
-4. Keep Consumer Adoption Pattern V1 unfrozen and preserve the actual Bundle V1 installation boundary.
+1. Apply the five-check lightweight adoption preflight when a new or legacy project first formally adopts the Hub.
+2. Close as `ADOPT_AS_IS` when no repository change is required; create a bounded project-local migration only for observed legacy debt.
+3. Return `BLOCKED` to ASH only for a reproducible technical issue that may represent a common Hub product defect.
+4. Keep bulk migration, preventive rollout, and speculative Hub remediation unauthorized.
 
 ## System Takeover Snapshot (2026-04-02)
 
