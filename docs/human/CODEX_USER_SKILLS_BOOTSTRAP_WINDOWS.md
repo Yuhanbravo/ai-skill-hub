@@ -31,6 +31,41 @@ tools\codex_user_skills_manifest.json
 
 它声明允许管理的 source/target、对象角色和 dependency relationship，不记录机器路径或实际安装状态，也不是新的 canonical source。
 
+## AI-level Canonical Routing（独立于 Bundle V1）
+
+`AI_LEVEL_CONFIG_BACK_REFERENCE` 使用 machine/user configuration 找到本地 Hub checkout，而不是要求 Consumer Project 保存主机绝对路径。它是 Bundle V1 的补充 router entry，不把 Bundle 扩成 Hub 镜像，也不改变 Bundle V1 的 ownership manifest。
+
+配置命令需要显式授权写入当前用户的 Codex home：
+
+```powershell
+<python> .\tools\ai_skill_hub_resolver.py configure `
+  --hub-root 'D:\path\to\ai-skill-hub'
+```
+
+它只创建或校验：
+
+```text
+$CODEX_HOME\ai-skill-hub\locator.json
+$CODEX_HOME\skills\ai-skill-hub-router\SKILL.md
+```
+
+前者可保存该机器的 Hub checkout path；后者只是让 AI 发现 locator/resolver 的薄入口，不复制任何 canonical Skill。该 router 不属于 `manage_codex_user_skills.ps1` 的 V1 managed entries；因此 V1 的 Check/Apply/Uninstall 继续只管理 `workflow-bootstrap`、`chatgpt-handoff-pilot` 与 `_protocol`，并保持该独立 router 不变。
+
+Consumer Project 的可复用只读预检：
+
+```powershell
+<python> .\tools\ai_skill_hub_resolver.py smoke `
+  --required-skill workflow-bootstrap `
+  --required-skill project-takeover
+
+<python> .\tools\ai_skill_hub_resolver.py doctor `
+  --required-skill documentation-governance
+```
+
+`smoke` 对每个逻辑 ID 输出 `RESOLVED`、`MISSING`、`INVALID` 或 `HUB_UNAVAILABLE`，再输出 `PASS` 或 `BLOCKED`。`doctor` 只诊断 locator/Hub/required Skill routing；它不扫描 Consumer Project 的 legacy debt，所以成功时为 `ADOPT_AS_IS`、失败时为 `BLOCKED`，不会推断 `MIGRATION_REQUIRED`。
+
+合法 canonical Skill 的身份是当前 Hub checkout 中的 `skills/<skill-id>/SKILL.md`：ID 语法、目录名和 frontmatter `name` 必须完全一致；任何其他目录声称同一 `name` 也会以 ambiguity 失败。`_protocol` 是 Bundle dependency container，不是可由 logical Skill ID 解析的 Skill。`SKILLS_INDEX.md` 和 `skills_index.json` 可作 discovery 辅助，但不替代这个 fail-closed identity rule。
+
 ## 前提
 
 - Windows PowerShell 5.1 或 PowerShell 7.x；

@@ -14,6 +14,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\run_local_checks.p
 
 - Router / pipeline smoke:
   - `python tests/test_skill_router.py`
+- AI-level canonical Skill resolution, required-Skill smoke, and consumer-routing doctor:
+  - `python tests/test_ai_skill_hub_resolver.py`
 - Adapter consistency smoke (`consumer` + `hub` contract):
   - `python tests/test_adapter_consistency_smoke.py`
 - Skill structure baseline:

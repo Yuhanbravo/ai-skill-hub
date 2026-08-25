@@ -256,6 +256,11 @@ function Get-CheckCatalog {
         args = @('tests\test_skill_router.py')
         expected_evidence = 'tests\test_skill_router.py'
     }
+    $universalSkillRouting = @{
+        name = 'universal-skill-routing'
+        args = @('tests\test_ai_skill_hub_resolver.py')
+        expected_evidence = 'tests\test_ai_skill_hub_resolver.py'
+    }
     $adapterConsistency = @{
         name = 'adapter-consistency-smoke'
         args = @('tests\test_adapter_consistency_smoke.py')
@@ -311,6 +316,7 @@ function Get-CheckCatalog {
         )
         smoke = @(
             $skillRouter
+            $universalSkillRouting
             $adapterConsistency
             $commitConvention
             $hubAdapterContract
@@ -321,6 +327,7 @@ function Get-CheckCatalog {
         )
         all = @(
             $skillRouter
+            $universalSkillRouting
             $adapterConsistency
             $commitConvention
             $hubAdapterContract
