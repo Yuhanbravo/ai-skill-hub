@@ -33,9 +33,11 @@ tools\codex_user_skills_manifest.json
 
 ## AI-level Canonical Routing（独立于 Bundle V1）
 
-`AI_LEVEL_CONFIG_BACK_REFERENCE` 使用 machine/user configuration 找到本地 Hub checkout，而不是要求 Consumer Project 保存主机绝对路径。它是 Bundle V1 的补充 router entry，不把 Bundle 扩成 Hub 镜像，也不改变 Bundle V1 的 ownership manifest。
+`AI_LEVEL_CONFIG_BACK_REFERENCE_V1` 使用一份 agent-neutral 的 machine/user configuration 找到本地 Hub checkout，而不是要求 Consumer Project 保存主机绝对路径。它是 Bundle V1 之外的独立 router entry，不把 Bundle 扩成 Hub 镜像，也不改变 Bundle V1 的 ownership manifest。
 
-配置命令需要显式授权写入当前用户的 Codex home：
+V1 冻结的 supported consumers：`CODEX`、`CLAUDE_CODE`、`GITHUB_COPILOT`、`KIMI_CODE`。
+
+配置命令需要显式授权写入当前用户的 machine/user-level routing state（不访问远端）：
 
 ```powershell
 <python> .\tools\ai_skill_hub_resolver.py configure `
@@ -45,11 +47,15 @@ tools\codex_user_skills_manifest.json
 它只创建或校验：
 
 ```text
-$CODEX_HOME\ai-skill-hub\locator.json
-$CODEX_HOME\skills\ai-skill-hub-router\SKILL.md
+~\.ai-skill-hub\locator.json                      # 唯一允许保存本机 Hub checkout path 的 agent-neutral locator
+$CODEX_HOME\skills\ai-skill-hub-router\SKILL.md   # Codex 薄 router entry
+~\.claude\skills\ai-skill-hub-router\SKILL.md     # Claude Code 薄 router entry
+~\.agents\skills\ai-skill-hub-router\SKILL.md     # 通用 Agent Skills 薄 router entry（V1 用于 GitHub Copilot / Kimi Code）
 ```
 
-前者可保存该机器的 Hub checkout path；后者只是让 AI 发现 locator/resolver 的薄入口，不复制任何 canonical Skill。该 router 不属于 `manage_codex_user_skills.ps1` 的 V1 managed entries；因此 V1 的 Check/Apply/Uninstall 继续只管理 `workflow-bootstrap`、`chatgpt-handoff-pilot` 与 `_protocol`，并保持该独立 router 不变。
+三个 router 是 byte-identical 薄入口：共用同一份 neutral locator，不复制任何 canonical Skill，也不内嵌 Hub 绝对路径。三者都消费同一 `SKILL.md` frontmatter + body 契约，所以 V1 不需要 per-agent variant；只有发现根目录不同。该 router 不属于 `manage_codex_user_skills.ps1` 的 V1 managed entries；因此 V1 的 Check/Apply/Uninstall 继续只管理 `workflow-bootstrap`、`chatgpt-handoff-pilot` 与 `_protocol`，并保持该独立 router 不变。
+
+`configure` 在写任何文件之前，先对 locator 与全部 adapter 目标做只读 preflight；任何目标存在未知或冲突内容时整个 configure 以 `Mutation=NONE` 阻断；单文件写仍为 temp file + atomic replace。测试或隔离环境可用 `--config-home`（或环境变量 `AI_SKILL_HUB_CONFIG_HOME`）覆盖默认用户 home，并用 `--codex-home` / `--claude-home` / `--agents-home`（或 `AI_SKILL_HUB_AGENTS_HOME`）覆盖各 adapter 根目录。Consumer Project 不知道这些物理路径。
 
 Consumer Project 的可复用只读预检：
 
@@ -63,6 +69,8 @@ Consumer Project 的可复用只读预检：
 ```
 
 `smoke` 对每个逻辑 ID 输出 `RESOLVED`、`MISSING`、`INVALID` 或 `HUB_UNAVAILABLE`，再输出 `PASS` 或 `BLOCKED`。`doctor` 只诊断 locator/Hub/required Skill routing；它不扫描 Consumer Project 的 legacy debt，所以成功时为 `ADOPT_AS_IS`、失败时为 `BLOCKED`，不会推断 `MIGRATION_REQUIRED`。
+
+未声明任何 required Skill 时，`smoke` / `doctor` 都以 `INSUFFICIENT_REQUIREMENTS` fail closed：空需求集不是 routing 健康的证据，automation 不得据此判定 migration safe。只有当调用方显式确认 "zero skills is intentional" 时，才可通过 `--allow-empty-requirements` 放行，此时输出带 `zero_requirements_intentional` 标记，与 "No required skills discovered" 严格区分。
 
 合法 canonical Skill 的身份是当前 Hub checkout 中的 `skills/<skill-id>/SKILL.md`：ID 语法、目录名和 frontmatter `name` 必须完全一致；任何其他目录声称同一 `name` 也会以 ambiguity 失败。`_protocol` 是 Bundle dependency container，不是可由 logical Skill ID 解析的 Skill。`SKILLS_INDEX.md` 和 `skills_index.json` 可作 discovery 辅助，但不替代这个 fail-closed identity rule。
 

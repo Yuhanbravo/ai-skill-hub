@@ -208,20 +208,25 @@
 
 用途：
 
-- 为首选的 `AI_LEVEL_CONFIG_BACK_REFERENCE` adoption mode 提供 machine-level Hub locator、logical Skill ID 的 canonical resolver、Required-Skills smoke 和只读 doctor。
+- 为首选的 `AI_LEVEL_CONFIG_BACK_REFERENCE_V1` adoption mode 提供 agent-neutral 的 machine-level Hub locator、logical Skill ID 的 canonical resolver、Required-Skills smoke 和只读 doctor。resolution core 与任何具体 Agent 无关。
 - Consumer Project 只声明逻辑 Skill ID；它不保存 Hub 绝对路径、不携带 Hub submodule，也不复制 canonical Skill payload。
+- V1 冻结的 supported consumers：`CODEX`、`CLAUDE_CODE`、`GITHUB_COPILOT`、`KIMI_CODE`。
 
-一次性配置当前机器（显式写入 `$CODEX_HOME`，不访问远端）：
+一次性配置当前机器（显式写入当前用户配置，不访问远端）：
 
 ```powershell
 <python> .\tools\ai_skill_hub_resolver.py configure `
   --hub-root 'D:\path\to\ai-skill-hub'
 ```
 
-该命令只创建或校验两项 machine/user-level routing state：
+该命令只创建或校验以下 machine/user-level routing state：
 
-- `$CODEX_HOME\ai-skill-hub\locator.json`：唯一允许保存本机 Hub checkout path 的 locator；
-- `$CODEX_HOME\skills\ai-skill-hub-router\SKILL.md`：不含 canonical payload 的薄 router entry。
+- `~\.ai-skill-hub\locator.json`：唯一允许保存本机 Hub checkout path 的 agent-neutral locator；
+- `$CODEX_HOME\skills\ai-skill-hub-router\SKILL.md`：Codex 薄 router entry；
+- `~\.claude\skills\ai-skill-hub-router\SKILL.md`：Claude Code 薄 router entry；
+- `~\.agents\skills\ai-skill-hub-router\SKILL.md`：通用 Agent Skills 薄 router entry（V1 用于 GitHub Copilot 与 Kimi Code）。
+
+三个 router byte-identical、共用同一 neutral locator，不含 canonical payload，也不内嵌 Hub 绝对路径（三类宿主消费同一 `SKILL.md` 契约，只有发现根目录不同，因此 V1 不需要 per-agent variant）。`configure` 先对 locator 与全部 adapter 目标做只读 preflight，任何未知/冲突内容即整体 `Mutation=NONE`；每个单文件写仍为 temp file + atomic replace。测试或隔离环境可覆盖默认路径：`--config-home`（或 `AI_SKILL_HUB_CONFIG_HOME`）覆盖用户 home，`--codex-home` / `--claude-home` / `--agents-home`（或 `AI_SKILL_HUB_AGENTS_HOME`）覆盖各 adapter 根目录。
 
 它不修改 Consumer Project，也不修改 `manage_codex_user_skills.ps1` 管理的 Bundle V1 ownership manifest。Bundle V1 的两个 bootstrap/protocol Skill 和 `_protocol` 仍保持原有生命周期；router 仅是独立的 AI-level thin adapter。
 
@@ -238,7 +243,7 @@
 
 resolver 的 canonical identity rule 是：Hub Git checkout 的 `skills/<skill-id>/SKILL.md` 必须存在，`skill-id` 必须是合法逻辑 ID，且 frontmatter `name` 必须与目录名完全一致；任何其他目录声称同一 `name` 也会以 ambiguity 失败。`_protocol` 是 Bundle 所需的 dependency container，不是可解析的 canonical Skill ID。`SKILLS_INDEX.md` 与 `skills_index.json` 可用于人类/metadata discovery，但不是该 fail-closed resolver 的 identity authority。
 
-`smoke` 的每项结果只能是 `RESOLVED`、`MISSING`、`INVALID` 或 `HUB_UNAVAILABLE`，整体为 `PASS` 或 `BLOCKED`。`doctor` 在 routing 完整时返回 `ADOPT_AS_IS`，否则返回 `BLOCKED`；它不扫描或迁移 Consumer Project，因此不会凭空输出 `MIGRATION_REQUIRED`。
+`smoke` 的每项结果只能是 `RESOLVED`、`MISSING`、`INVALID` 或 `HUB_UNAVAILABLE`，整体为 `PASS` 或 `BLOCKED`。`doctor` 在 routing 完整时返回 `ADOPT_AS_IS`，否则返回 `BLOCKED`；它不扫描或迁移 Consumer Project，因此不会凭空输出 `MIGRATION_REQUIRED`。未声明任何 required Skill 时两者都以 `INSUFFICIENT_REQUIREMENTS` fail closed；只有显式传 `--allow-empty-requirements` 表示 "zero skills is intentional" 才放行，且输出带 `zero_requirements_intentional` 标记，automation 不得把空需求集当作 migration safe。
 
 ## generate_skill_metadata.py
 

@@ -39,6 +39,7 @@ This file is the single source of truth for project handoff.
 - 2026-08-06: Refreshed system status first (`docs/status/skill-hub-status.md`, Updated at `2026-08-06`) and then merged the completed Project Runtime Pack MVP V1 local final closure into handoff context. This records `ASH-PROJECT-RUNTIME-PACK-MVP-V1` as `CLOSED_LOCAL_ONLY_WITH_NOTES` with decision `PASS_WITH_NOTES_PROJECT_RUNTIME_PACK_MVP_V1_LOCAL_FINAL_CLOSURE`; preserves the commit chain (`d4d735e0` design / `7c8e54c` implementation / `1f01ab2` remediation) and the remediation and heterogeneous revalidation evidence (112 passed x 3, 20/20 submodule rollback, 20/20 concurrency, Codex/Kimi E2E PASS); preserves the pre-existing `codex-user-skills-bootstrap` MAX_PATH baseline note, the Copilot workspace-root and Claude authenticated E2E non-verified notes, the deferred F-10 ~ F-15 notes with substance, and the `file://` fixture restriction; and leaves remote publication for separate authorization while preserving `Phase 3 - Controlled System` and all existing hard boundaries.
 - 2026-08-06: Refreshed system status first (`docs/status/skill-hub-status.md`, Updated at `2026-08-06`) and then merged the completed Project Runtime Pack MVP V1 remote publication into handoff context. This records `ASH-PROJECT-RUNTIME-PACK-MVP-V1` as `CLOSED_REMOTE_PUBLISHED_WITH_NOTES` with decision `PASS_WITH_NOTES_PROJECT_RUNTIME_PACK_MVP_V1_REMOTE_PUBLICATION_AND_FINAL_CLOSURE`; the local closure commit `4e3366c3...` was safely published to the authoritative remote `gitea-nas:yuhanbravo/ai-skill-hub.git` with no force push, and post-push local `main` == `origin/main` == actual remote `4e3366c3...` with ahead/behind `0 0`; all preserved notes (MAX_PATH baseline, Copilot workspace-root and Claude authenticated E2E, deferred F-10 ~ F-15 with substance, `file://` fixture restriction) remain in force, recorded in `tasks/project_runtime_pack_mvp_v1_remote_publication_report.md`; the next action is the consumer-project pilot, while preserving `Phase 3 - Controlled System` and all existing hard boundaries.
 - 2026-08-10: Froze Consumer Adoption Architecture V1 as `AI_LEVEL_CONFIG_BACK_REFERENCE`, closed the standalone Consumer Repository Discovery Program, and closed the legacy `Derivative_Data` pilot as `CLOSED_SUPERSEDED_BY_AI_LEVEL_BACK_REFERENCE_ADOPTION_ARCHITECTURE`. Historical A1R and A2 CLI evidence remains preserved; A2 App remains not completed but is no longer required for architecture closure. No consumer migration, bulk rollout, or Hub product change was authorized.
+- 2026-08-25: Refreshed system status first (`docs/status/skill-hub-status.md`, Updated at `2026-08-25`) and then merged the `AI_LEVEL_CONFIG_BACK_REFERENCE_V1` contract freeze plus its universal-routing remediation into handoff context. This freezes the concrete V1 routing contract (agent-agnostic resolution core, agent-neutral `~/.ai-skill-hub/locator.json`, thin user-level adapters for Codex / Claude Code / a generic Agent Skills entry serving GitHub Copilot and Kimi Code, configure all-target preflight with `Mutation=NONE` on conflict, empty-requirement fail-closed) on branch `codex/ai-level-universal-routing-v1` at base commit `9231e5fb511d50069f93247720444cce8a13cb1f`, after the previous review decision `BLOCKED_BY_ARCHITECTURE_CONTRACT`. Runtime Pack pinning semantics, manifest schema, initializer, and project-local router behavior are unchanged. The remediation is recorded as `LOCAL_REMEDIATION_COMPLETE_PENDING_INDEPENDENT_REVIEW`; it is not merged and no remote write occurred.
 
 ## Current Status
 
@@ -51,6 +52,54 @@ As of the `2026-07-27` status baseline, current observed `origin/main` HEAD is `
 As of `2026-07-27`, Codex User Skills Bootstrap V1 is closed through a real-installation and host E2E evidence pass. The implementation baseline is `f57ae3e9d89fb3432fbb8b7c572042b69f6fcc58`; the installed `workflow-bootstrap`, `chatgpt-handoff-pilot`, and `_protocol` entries are current and fingerprint-consistent; CLI and Codex App discovery passed; and the closure evidence is recorded in `docs/dogfood/codex_user_skills_bootstrap_v1_real_installation_and_host_e2e_report.md`. This is a local installation closure, not consumer-repository migration, distribution readiness, or authorization to merge the docs branch to `main`.
 
 Consumer Adoption Architecture V1 is now `FROZEN`. The primary adoption mode is `AI_LEVEL_CONFIG_BACK_REFERENCE`: AI-level project configuration is the primary Consumer -> Hub discovery and back-reference entry, and `ai-skill-hub` remains the canonical capability SSOT for generic skill implementation, tests, versions, and publication. Consumer repositories do not copy generic canonical skill payload; they continue to own project-specific AGENTS, governance and business boundaries, task packages, validation, status, handoff, and evidence.
+
+The concrete V1 routing contract `AI_LEVEL_CONFIG_BACK_REFERENCE_V1` is now `FROZEN` under that architecture, without rewriting any historical contract:
+
+1. The canonical Skill resolution core is agent-agnostic.
+2. After full Project Runtime Pack retirement, every currently supported local-development AI consumer must still have a verified canonical Hub discovery path.
+3. Agent discovery adapters may use each agent's native user-level Skill directory; physical paths are not required to be uniform.
+4. A Consumer Project does not store canonical Skill payload.
+5. A Consumer Project does not store machine-specific Hub absolute paths.
+6. The User Bundle is not expanded into a full canonical Skill mirror.
+
+Frozen V1 supported consumers are `CODEX`, `CLAUDE_CODE`, `GITHUB_COPILOT`, and `KIMI_CODE`. The Hub locator is one agent-neutral machine/user configuration at `~/.ai-skill-hub/locator.json` (explicit config-home override reserved for tests and isolated environments); it is the only component that may store the machine-local Hub checkout path, its schema remains fail closed, and it creates no canonical Skill copy. Thin user-level router adapters live at `$CODEX_HOME/skills/ai-skill-hub-router/SKILL.md`, `~/.claude/skills/ai-skill-hub-router/SKILL.md`, and `~/.agents/skills/ai-skill-hub-router/SKILL.md` (the generic Agent Skills entry serving GitHub Copilot and Kimi Code); all share the same neutral locator and contain neither canonical payload nor machine-specific Hub absolute paths. `configure` inspects the locator destination and every adapter destination before any write and yields `Mutation=NONE` on any conflict. `smoke` / `doctor` with zero declared required skills fail closed with `INSUFFICIENT_REQUIREMENTS` unless zero skills is explicitly declared intentional.
+
+The matching implementation remediation landed on branch `codex/ai-level-universal-routing-v1` at base commit `9231e5fb511d50069f93247720444cce8a13cb1f` after the previous review decision `BLOCKED_BY_ARCHITECTURE_CONTRACT`, and is recorded as `LOCAL_REMEDIATION_COMPLETE_PENDING_INDEPENDENT_REVIEW`. Runtime Pack pinning semantics, manifest schema, initializer, project-local router behavior, and the supported pinned/portable modes are unchanged; this round only supplies equivalent discovery for the preferred local-development adoption mode.
+
+```text
+AI_Level_Config_Back_Reference_Contract_V1=
+FROZEN
+
+Canonical_Resolution_Core=
+AGENT_AGNOSTIC
+
+Supported_Consumers_V1=
+CODEX
+CLAUDE_CODE
+GITHUB_COPILOT
+KIMI_CODE
+
+Hub_Locator_V1=
+AGENT_NEUTRAL_USER_CONFIG
+
+Consumer_Project_Canonical_Payload=
+NOT_STORED
+
+Consumer_Project_Hub_Absolute_Path=
+NOT_STORED
+
+User_Bundle_Full_Mirror=
+NOT_EXPANDED
+
+Universal_Routing_V1_Remediation=
+LOCAL_REMEDIATION_COMPLETE_PENDING_INDEPENDENT_REVIEW
+
+Remediation_Base_Commit=
+9231e5fb511d50069f93247720444cce8a13cb1f
+
+Remediation_Branch=
+codex/ai-level-universal-routing-v1
+```
 
 The legacy `Derivative_Data` Consumer Adoption Pilot is `CLOSED_SUPERSEDED_BY_AI_LEVEL_BACK_REFERENCE_ADOPTION_ARCHITECTURE`, not failed. Its historical evidence remains explicit: A1R `PASS`; A2 CLI `PASS_WITH_NOTES`; observed compatibility debt behind the provisional `MIGRATE_PROJECT_RELATIVE_REFERENCES` direction; and A2 App `NOT_COMPLETED_AND_NO_LONGER_REQUIRED_FOR_ARCHITECTURE_CLOSURE`. That provisional migration direction applies only to the debt observed in `Derivative_Data`; it is not a universal consumer requirement, default migration policy, or bulk-rollout authorization. The standalone Consumer Repository Discovery Program is closed.
 
@@ -155,6 +204,12 @@ The P1 closeout records PR #15, PR #16, and PR #17 as merged evidence for P1 exa
 - Workspace-aware or no-git status refresh extends evidence collection only. It must not promote workspace signals, bridge copies, readable derivatives, or other convenience surfaces into new authoritative system sources.
 - `system-status-update` and `system-handoff` coordination must remain minimal: refresh status first, then merge handoff; keep a `14`-day freshness gate and phase consistency check, but do not introduce auto-trigger orchestration.
 - `ai-skill-hub` is the SSOT for generic canonical capability and skill payload. Consumer repositories must not copy generic canonical payload; AI-level project configuration provides the primary discovery and back-reference entry, while project-specific governance and business rules remain local.
+- The canonical Skill resolution core must remain agent-agnostic; agent-specific behavior lives only in thin user-level discovery adapters, never in the resolver core.
+- The Hub locator is the single agent-neutral machine/user configuration (`~/.ai-skill-hub/locator.json`, with explicit config-home override reserved for tests and isolated environments). It is the only component that may store the machine-local Hub checkout path, its schema must remain fail closed, and it must not create canonical Skill copies.
+- Consumer Projects must not store canonical Skill payload or machine-specific Hub absolute paths; they declare logical Skill IDs only.
+- The User Bundle must not be expanded into a full canonical Skill mirror.
+- Routing `configure` must complete read-only preflight of the locator destination and every adapter destination before any write; any unknown or conflicting existing content yields `Mutation=NONE`, and single-file writes remain temp-file + atomic replace.
+- An empty required-Skill set in `smoke` / `doctor` must fail closed (`INSUFFICIENT_REQUIREMENTS`) unless the caller explicitly declares that zero required skills is intentional; automation must not treat an empty requirement set as migration-safe.
 - `workflow-bootstrap` Phase 0-3 baseline guidance must remain canonical guidance only. It must not be presented as completed Phase 4 multi-project pilot work, distribution readiness, or authorization to expand the project-side file family by default.
 - The legacy `Derivative_Data` pilot is closed as superseded, not failed. Its incomplete A2 App evidence must remain visible but must not be retained as an architecture-closure requirement.
 - Consumer migration is on demand only. No bulk consumer migration, preventive rollout, repo-local generic skill fork, hard-coded host installation path, business-code change, or speculative Hub capability work is authorized.

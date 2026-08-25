@@ -1,11 +1,11 @@
 # Skill Hub Status
 
-- Updated at: `2026-08-10`
+- Updated at: `2026-08-25`
 - Scope: `ai-skill-hub`
 - Method: `system-status-update` wrapper over `update-project-status`
 - Config: `.codex/skill-config/update-project-status.json`
-- Data sources: Git history through current observed `main` / `origin/main` HEAD `b42c13e1c5be661bf3933b516775feff4a0d3a53`, working tree, `skills/`, `.agents/`, `.github/`, `tools/`, `docs/status/`, `docs/HANDOFF.md`, historical Consumer Adoption Pilot evidence, and the Project Runtime Pack MVP V1 closure records.
-- Note: this refresh (`2026-08-10`) freezes Consumer Adoption Architecture V1 and closes the legacy pilot / standalone discovery program without rewriting historical pilot evidence as a complete pass.
+- Data sources: Git history through current observed `main` / `origin/main` HEAD `b42c13e1c5be661bf3933b516775feff4a0d3a53`, branch `codex/ai-level-universal-routing-v1` (remediation on top of `9231e5fb511d50069f93247720444cce8a13cb1f`), working tree, `skills/`, `.agents/`, `.github/`, `tools/`, `docs/status/`, `docs/HANDOFF.md`, historical Consumer Adoption Pilot evidence, and the Project Runtime Pack MVP V1 closure records.
+- Note: this refresh (`2026-08-25`) freezes the concrete `AI_LEVEL_CONFIG_BACK_REFERENCE_V1` contract under the already-frozen Consumer Adoption Architecture V1 and records the universal-routing remediation state; it does not reopen or rewrite any historical pilot evidence.
 
 ## Project Runtime Pack MVP V1
 
@@ -145,6 +145,59 @@ NOT_AUTHORIZED
 
 Hub_Product_Remediation=
 DEFECT_DRIVEN_ONLY
+```
+
+### AI-Level Config Back-Reference Contract V1 (`AI_LEVEL_CONFIG_BACK_REFERENCE_V1`)
+
+- Contract status: `FROZEN` (this refresh freezes the contract; the matching remediation of the routing implementation is recorded below).
+- Relationship: Consumer Adoption Architecture V1 (`AI_LEVEL_CONFIG_BACK_REFERENCE`) remains the frozen architecture; this contract freezes its concrete V1 routing semantics without rewriting any historical contract.
+- Core contract:
+  1. The canonical Skill resolution core is agent-agnostic.
+  2. After full Project Runtime Pack retirement, every currently supported local-development AI consumer must still have a verified canonical Hub discovery path.
+  3. Agent discovery adapters may use each agent's native user-level Skill directory; physical paths are not required to be uniform.
+  4. A Consumer Project does not store canonical Skill payload.
+  5. A Consumer Project does not store machine-specific Hub absolute paths.
+  6. The User Bundle is not expanded into a full canonical Skill mirror.
+- Frozen V1 supported consumers: `CODEX`, `CLAUDE_CODE`, `GITHUB_COPILOT`, `KIMI_CODE`.
+- Hub locator V1: one agent-neutral machine/user configuration at `~/.ai-skill-hub/locator.json` (the current user's home on this machine), with an explicit config-home override reserved for tests and isolated environments. The locator is the only component allowed to store the machine-local Hub checkout path; its schema remains fail closed; no canonical Skill copy is created by it. The pre-merge candidate's Codex-bound locator location carries no backward-compatibility obligation.
+- Agent adapters V1: thin user-level Skill entries only — Codex (`$CODEX_HOME/skills/ai-skill-hub-router/SKILL.md`), Claude Code (`~/.claude/skills/ai-skill-hub-router/SKILL.md`), and one generic Agent Skills entry (`~/.agents/skills/ai-skill-hub-router/SKILL.md`) that serves GitHub Copilot and Kimi Code. All adapters share the same neutral locator, contain no canonical payload, and contain no machine-specific Hub absolute path.
+- `configure` safety: all target destinations (locator plus every adapter) pass a read-only preflight before the first write; any unknown or conflicting existing content yields `Mutation=NONE`; single-file writes remain temp-file + atomic replace.
+- Empty-requirement safety: `smoke` / `doctor` with zero declared required skills fail closed with `INSUFFICIENT_REQUIREMENTS` unless the caller explicitly confirms that zero skills is intentional; an empty requirement set is never evidence of migration safety.
+- Runtime Pack compatibility: Runtime Pack pinning semantics, manifest schema, initializer, project-local router behavior, and the supported pinned/portable modes are unchanged; this contract only supplies the equivalent discovery for the preferred local-development adoption mode.
+
+```text
+AI_Level_Config_Back_Reference_Contract_V1=
+FROZEN
+
+Canonical_Resolution_Core=
+AGENT_AGNOSTIC
+
+Supported_Consumers_V1=
+CODEX
+CLAUDE_CODE
+GITHUB_COPILOT
+KIMI_CODE
+
+Hub_Locator_V1=
+AGENT_NEUTRAL_USER_CONFIG
+
+Consumer_Project_Canonical_Payload=
+NOT_STORED
+
+Consumer_Project_Hub_Absolute_Path=
+NOT_STORED
+
+User_Bundle_Full_Mirror=
+NOT_EXPANDED
+
+Universal_Routing_V1_Remediation=
+LOCAL_REMEDIATION_COMPLETE_PENDING_INDEPENDENT_REVIEW
+
+Remediation_Base_Commit=
+9231e5fb511d50069f93247720444cce8a13cb1f
+
+Remediation_Branch=
+codex/ai-level-universal-routing-v1
 ```
 
 ## Layer Status
