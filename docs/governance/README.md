@@ -12,6 +12,7 @@ This directory holds repository-governance documents that define or explain cros
 
 - `COMMIT_CONVENTION.md`: canonical commit-message convention for this repository
 - `adapter_governance.md`: adapter drift-check scope, usage, and boundaries
+- `stale_router_reconciliation_v1.md`: the only sanctioned maintainer reconciliation for the exact known pre-remediation machine router state (hash-verified, fail closed)
 - `documentation_status_coordination.md`: minimum coordination note between `documentation-governance` and `update-project-status`
 - `decisions/`: lightweight ADR / decision records for repository-level governance boundaries
 

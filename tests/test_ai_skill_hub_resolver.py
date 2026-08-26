@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -7,6 +8,51 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+
+
+# Exact known stale router shape from the pre-remediation generation (base
+# 9231e5f, before the 240f74d locator neutralization).  The sanctioned
+# maintainer reconciliation in docs/governance/stale_router_reconciliation_v1.md
+# keys on this exact byte shape; the fixture is pinned by hash so any drift in
+# the constant fails loudly instead of silently weakening the fail-closed
+# coverage.  Lines are joined explicitly so the fixture is independent of the
+# checkout's line-ending convention.
+KNOWN_STALE_ROUTER_SHA256 = (
+    "80272ffa8e0bf699ffc9ee2fb39bf8246089d530161a21c26827307e939979aa"
+)
+KNOWN_STALE_ROUTER_TEXT = (
+    "\n".join(
+        (
+            "---",
+            "name: ai-skill-hub-router",
+            'description: "Resolve logical ai-skill-hub Skill IDs through the machine-level Hub locator."',
+            "---",
+            "",
+            "# AI Skill Hub Router",
+            "",
+            "This is a machine-level thin routing adapter. It does not contain canonical",
+            "Skill payload and it does not grant write, install, update, or fallback",
+            "authority.",
+            "",
+            "## Route",
+            "",
+            "1. Read the machine-local locator at `$CODEX_HOME/ai-skill-hub/locator.json`.",
+            "2. Require locator schema `1` and kind `ai-skill-hub.canonical-hub-locator`.",
+            "3. From the located Hub checkout, use `tools/ai_skill_hub_resolver.py` with an",
+            "   exact logical Skill ID. Do not infer a physical Consumer Project path.",
+            "4. Accept only a `RESOLVED` result, then read the returned canonical",
+            "   `skills/<skill-id>/SKILL.md` completely.",
+            "5. If the locator, Hub, canonical identity, or entry is invalid or missing,",
+            "   stop and report the resolver result. Do not fall back to a project copy,",
+            "   Runtime Pack, Bundle payload, adapter, or model memory.",
+            "",
+            "Use `doctor` or `smoke` in the resolver for a reusable required-Skill routing",
+            "check. The Consumer Project declares logical IDs only; the machine locator is",
+            "the only component that may store a local Hub checkout path.",
+        )
+    )
+    + "\n"
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -661,6 +707,79 @@ def test_competing_declared_canonical_identity_is_ambiguous_and_blocked() -> Non
         assert payload["resolutions"][0]["code"] == "CANONICAL_IDENTITY_AMBIGUOUS"
 
 
+def test_known_stale_router_shape_is_blocked_then_reconciled_by_documented_removal() -> None:
+    """Sanctioned reconciliation path from docs/governance/stale_router_reconciliation_v1.md.
+
+    The exact known stale router shape must still be blocked by configure with
+    Mutation=NONE (the frozen contract is unchanged); only the documented
+    maintainer removal step may transition the machine, after which the frozen
+    configure converges and is idempotent.
+    """
+    assert hashlib.sha256(KNOWN_STALE_ROUTER_TEXT.encode("utf-8")).hexdigest() == (
+        KNOWN_STALE_ROUTER_SHA256
+    )
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        hub_root = build_hub(root)
+        sandbox = make_sandbox(root)
+
+        stale_adapter = sandbox.adapter_path("codex")
+        write_text(stale_adapter, KNOWN_STALE_ROUTER_TEXT)
+
+        result, payload = run_configure(sandbox, "--hub-root", str(hub_root))
+        assert result.returncode == 2
+        assert payload["decision"] == "BLOCKED_ROUTER_CONFLICT"
+        assert payload["overall"] == "BLOCKED"
+        assert payload["mutation"] == "NONE"
+        # Mutation=NONE is literal: no neutral locator and no other adapter.
+        assert not sandbox.locator_path.exists()
+        assert not sandbox.adapter_path("claude").exists()
+        assert not sandbox.adapter_path("agents").exists()
+        assert stale_adapter.read_text(encoding="utf-8") == KNOWN_STALE_ROUTER_TEXT
+
+        # Documented maintainer step: remove exactly the verified stale file.
+        stale_adapter.unlink()
+
+        payload = configure(sandbox, hub_root)
+        assert payload["mutation"] == "PERFORMED"
+        assert stale_adapter.read_text(encoding="utf-8") != KNOWN_STALE_ROUTER_TEXT
+        assert "~/.ai-skill-hub/locator.json" in stale_adapter.read_text(encoding="utf-8")
+        assert "$CODEX_HOME" not in stale_adapter.read_text(encoding="utf-8")
+
+        # Already-current state is idempotent.
+        result, payload = run_configure(sandbox, "--hub-root", str(hub_root))
+        assert result.returncode == 0, result.stderr
+        assert payload["decision"] == "NO_CHANGE_HUB_LOCATOR_CURRENT"
+        assert payload["mutation"] == "NONE"
+
+
+def test_known_stale_router_near_miss_still_fails_closed() -> None:
+    """A one-character deviation from the known stale shape is unknown content:
+    still BLOCKED_ROUTER_CONFLICT with Mutation=NONE, and it must never be
+    treated as reconcilable."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        hub_root = build_hub(root)
+        sandbox = make_sandbox(root)
+
+        near_miss = KNOWN_STALE_ROUTER_TEXT.replace(
+            "machine-level Hub locator", "machine level Hub locator", 1
+        )
+        assert near_miss != KNOWN_STALE_ROUTER_TEXT
+        stale_adapter = sandbox.adapter_path("codex")
+        write_text(stale_adapter, near_miss)
+
+        result, payload = run_configure(sandbox, "--hub-root", str(hub_root))
+        assert result.returncode == 2
+        assert payload["decision"] == "BLOCKED_ROUTER_CONFLICT"
+        assert payload["overall"] == "BLOCKED"
+        assert payload["mutation"] == "NONE"
+        assert not sandbox.locator_path.exists()
+        assert not sandbox.adapter_path("claude").exists()
+        assert not sandbox.adapter_path("agents").exists()
+        assert stale_adapter.read_text(encoding="utf-8") == near_miss
+
+
 def main() -> int:
     tests = [
         test_configure_creates_neutral_locator_and_all_thin_adapters,
@@ -681,6 +800,8 @@ def main() -> int:
         test_invalid_hub_and_missing_canonical_entry_are_blocked,
         test_unsupported_locator_schema_is_invalid_without_fallback,
         test_competing_declared_canonical_identity_is_ambiguous_and_blocked,
+        test_known_stale_router_shape_is_blocked_then_reconciled_by_documented_removal,
+        test_known_stale_router_near_miss_still_fails_closed,
     ]
     for test in tests:
         test()

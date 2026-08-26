@@ -230,6 +230,8 @@
 
 它不修改 Consumer Project，也不修改 `manage_codex_user_skills.ps1` 管理的 Bundle V1 ownership manifest。Bundle V1 的两个 bootstrap/protocol Skill 和 `_protocol` 仍保持原有生命周期；router 仅是独立的 AI-level thin adapter。
 
+若机器上残留 locator 中立化之前的旧版 router adapter 导致 `configure` 以 `BLOCKED_ROUTER_CONFLICT` 阻断，唯一被授权的协调程序见 `docs/governance/stale_router_reconciliation_v1.md`（hash 精确识别 + 维护者删除已验证文件 + 冻结 `configure` 重建）；没有 `--force` 或其他改写通道。
+
 只读解析、smoke 和 doctor：
 
 ```powershell

@@ -1,11 +1,12 @@
 # Skill Hub Status
 
-- Updated at: `2026-08-25`
+- Updated at: `2026-08-26`
 - Scope: `ai-skill-hub`
 - Method: `system-status-update` wrapper over `update-project-status`
 - Config: `.codex/skill-config/update-project-status.json`
-- Data sources: Git history through current observed `main` / `origin/main` HEAD `b42c13e1c5be661bf3933b516775feff4a0d3a53`, branch `codex/ai-level-universal-routing-v1` (remediation on top of `9231e5fb511d50069f93247720444cce8a13cb1f`), working tree, `skills/`, `.agents/`, `.github/`, `tools/`, `docs/status/`, `docs/HANDOFF.md`, historical Consumer Adoption Pilot evidence, and the Project Runtime Pack MVP V1 closure records.
-- Note: this refresh (`2026-08-25`) freezes the concrete `AI_LEVEL_CONFIG_BACK_REFERENCE_V1` contract under the already-frozen Consumer Adoption Architecture V1 and records the universal-routing remediation state; it does not reopen or rewrite any historical pilot evidence.
+- Data sources: Git history through current observed local `main` HEAD `240f74d1d00c39cb2a6485a3e1af9197e77802b9` (local `main` carries the frozen universal-routing line, ahead of `origin/main`), working tree, `skills/`, `.agents/`, `.github/`, `tools/`, `docs/status/`, `docs/HANDOFF.md`, historical Consumer Adoption Pilot evidence, and the Project Runtime Pack MVP V1 closure records.
+- Note: the `2026-08-25` refresh froze the concrete `AI_LEVEL_CONFIG_BACK_REFERENCE_V1` contract under the already-frozen Consumer Adoption Architecture V1 and recorded the universal-routing remediation state; it did not reopen or rewrite any historical pilot evidence.
+- Note: this refresh (`2026-08-26`) records the `ASH_STALE_ROUTER_RECONCILIATION_V1` closure (docs + tests only; frozen resolver semantics unchanged) and meets the 14-day freshness gate against the `2026-08-25` baseline.
 
 ## Project Runtime Pack MVP V1
 
@@ -199,6 +200,15 @@ Remediation_Base_Commit=
 Remediation_Branch=
 codex/ai-level-universal-routing-v1
 ```
+
+### Stale Router Reconciliation V1 (`ASH_STALE_ROUTER_RECONCILIATION_V1`)
+
+- Work item: `ASH_STALE_ROUTER_RECONCILIATION_V1`; accepted baseline `main @ 240f74d1d00c39cb2a6485a3e1af9197e77802b9`.
+- Product remediation: `DOCS_AND_TESTS_ONLY` — no resolver / router code change; frozen `configure` semantics unchanged (unknown or conflicting existing content still yields `Mutation=NONE`).
+- Sanctioned mechanism: `docs/governance/stale_router_reconciliation_v1.md` is the only authorized machine-level stale-router transition — exact SHA-256 identification of the two known pre-remediation artifacts (stale router adapter SHA-256 `80272ffa…3979aa`, 1171 bytes; legacy Codex-bound locator SHA-256 `ac5665bf…369c90`, 113 bytes), maintainer removal of hash-verified files only, then frozen `configure` rebuild. No `--force`, no generic migration framework, no arbitrary legacy adoption.
+- Focused tests: `tests/test_ai_skill_hub_resolver.py` 20/20 PASS, including the new coverage: the exact known stale shape is still `BLOCKED_ROUTER_CONFLICT` with `Mutation=NONE`; the documented removal → configure transition converges and is idempotent; a one-character near-miss still fails closed.
+- Regression: `skill-router`, `universal-skill-routing`, `adapter-consistency-smoke`, `commit-convention`, `hub-adapter-contract`, `dryrun-no-side-effects`, `reseed-audit`, `sync-smoke`, `skill-structure`, and `codex-user-skills-bootstrap` 71/71 all PASS under `D:\miniforge3\envs\dev-core-py312` (the previously recorded MAX_PATH baseline failure did not reproduce under the workspace-local TEMP used this round). `project-runtime-pack` could not execute in this session: the confined sandbox blocks msys2 `sh.exe` signal pipes (standalone `sh -c` exits `0xC0000142`), which every fixture `git clone` requires; no runtime-pack file changed in this work item, so the accepted-baseline evidence (124 passed) stands. This is an environment limitation, not a product gap.
+- Machine reconciliation on this host: `PARTIAL_SANCTIONED_STATE` — the two hash-verified stale artifacts were removed through the sanctioned mechanism on `2026-08-26`; the frozen `configure` write itself is pending an external execution gate (`READY_FOR_EXTERNAL_MACHINE_GATE`) because the executing session sandbox may not write user-home routing directories. Recorded machine state: no neutral locator and no current adapters exist yet; unknown-state fail-closed posture is unchanged.
 
 ## Layer Status
 

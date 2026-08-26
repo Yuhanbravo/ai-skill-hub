@@ -57,6 +57,8 @@ $CODEX_HOME\skills\ai-skill-hub-router\SKILL.md   # Codex 薄 router entry
 
 `configure` 在写任何文件之前，先对 locator 与全部 adapter 目标做只读 preflight；任何目标存在未知或冲突内容时整个 configure 以 `Mutation=NONE` 阻断；单文件写仍为 temp file + atomic replace。测试或隔离环境可用 `--config-home`（或环境变量 `AI_SKILL_HUB_CONFIG_HOME`）覆盖默认用户 home，并用 `--codex-home` / `--claude-home` / `--agents-home`（或 `AI_SKILL_HUB_AGENTS_HOME`）覆盖各 adapter 根目录。Consumer Project 不知道这些物理路径。
 
+若 `configure` 因机器上残留的旧版（locator 中立化之前）router adapter 而以 `BLOCKED_ROUTER_CONFLICT` 阻断，唯一被授权的协调程序是 `docs/governance/stale_router_reconciliation_v1.md`：hash 精确识别已知 stale 形态、由维护者删除已验证文件、再用冻结 `configure` 重建。除此之外不存在 `--force`、自动升级或其他改写通道；任何不匹配的内容继续保持 fail closed。
+
 Consumer Project 的可复用只读预检：
 
 ```powershell
