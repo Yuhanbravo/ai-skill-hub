@@ -85,7 +85,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\run_local_checks.p
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\run_local_checks.ps1 -Checks all
 ```
 
-这个入口用于增强本地环境韧性，会按 `python -> py -3 -> conda run` 选择执行器；它仍然只是本地维护入口，不是 CI 或自动修复机制。若当前没有可用活动环境，仍可能需要显式传入 `-CondaEnvName`。
+这个入口通过 `repo-python` 将 Python workload 交给 AI_Workbench 的 runtime broker；仓库本身不选择解释器，也不在 broker 失败后回退到 `python`、`py` 或 Conda。`-CondaEnvName` 与 `-UsePyLauncher` 仅暂时保留为显式报错的旧参数。该入口仍然只是本地维护入口，不是 CI 或自动修复机制。
 
 ## SkillHub Status Template
 

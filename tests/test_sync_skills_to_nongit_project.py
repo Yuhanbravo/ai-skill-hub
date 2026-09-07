@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -61,7 +62,7 @@ def snapshot_tree(root: Path) -> list[str]:
 
 def assert_adapter_consistency(project_path: Path) -> None:
     result = subprocess.run(
-        ["python", str(CHECK_ADAPTER_SCRIPT_PATH), str(project_path)],
+        [sys.executable, str(CHECK_ADAPTER_SCRIPT_PATH), str(project_path)],
         capture_output=True,
         text=True,
         encoding="utf-8",

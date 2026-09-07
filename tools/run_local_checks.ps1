@@ -63,191 +63,42 @@ function Get-RepoRoot {
     return (Resolve-Path -LiteralPath (Join-Path (Split-Path -Path $scriptFilePath -Parent) '..')).ProviderPath
 }
 
-function Test-ExecutorCandidate {
-    param(
-        [Parameter(Mandatory = $true)]
-        [object]$Candidate
-    )
+function Get-RepoPythonExecutor {
+    $command = @(
+        Get-Command 'repo-python' -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandType -in @('Application', 'ExternalScript') }
+    ) | Select-Object -First 1
+
+    if ($null -eq $command) {
+        throw 'Environment issue: repo-python is unavailable. Python runtime selection is governed by AI_Workbench; no fallback interpreter will be used.'
+    }
+
+    $program = [string]$command.Source
+    if ([string]::IsNullOrWhiteSpace($program)) {
+        throw 'Environment issue: repo-python resolved without an invocable source path.'
+    }
 
     try {
-        $probeArguments = @($Candidate.base_arguments) + @('--version')
-        $probeOutput = @(& $Candidate.program @probeArguments 2>&1)
-        $exitCode = $LASTEXITCODE
-        if ($exitCode -ne 0) {
-            return $false
-        }
-
-        $versionOutput = ($probeOutput | Out-String).Trim()
-        return $versionOutput -match '(?i)\APython\s+\d+\.\d+(?:\.\d+)?(?:[a-z]+\d*)?\z'
+        $resolutionOutput = @(& $program -BrokerResolveOnly 2>&1)
+        $resolutionExitCode = $LASTEXITCODE
     }
     catch {
-        return $false
-    }
-}
-
-function Get-ApplicationCandidates {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Name
-    )
-
-    $seen = @{}
-    $commands = @(Get-Command $Name -All -CommandType Application -ErrorAction SilentlyContinue)
-    foreach ($command in $commands) {
-        $program = [string]$command.Source
-        if ([string]::IsNullOrWhiteSpace($program)) {
-            continue
-        }
-
-        $key = $program.ToLowerInvariant()
-        if ($seen.ContainsKey($key)) {
-            continue
-        }
-        $seen[$key] = $true
-        if (Test-Path -LiteralPath $program -PathType Leaf) {
-            (Resolve-Path -LiteralPath $program).ProviderPath
-        }
-    }
-}
-
-function Test-CondaEnvironmentName {
-    param(
-        [AllowEmptyString()]
-        [string]$Name
-    )
-
-    return (
-        -not [string]::IsNullOrWhiteSpace($Name) -and
-        $Name -cmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'
-    )
-}
-
-function Get-CondaEnvironmentExecutor {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$EnvironmentName
-    )
-
-    foreach ($condaProgram in @(Get-ApplicationCandidates -Name 'conda')) {
-        try {
-            $infoArguments = @('info', '--envs', '--json')
-            $infoOutput = @(& $condaProgram @infoArguments 2>&1)
-            $infoExitCode = $LASTEXITCODE
-            if ($infoExitCode -ne 0) {
-                continue
-            }
-
-            $info = ($infoOutput | Out-String) | ConvertFrom-Json
-            $environmentRoots = @($info.envs)
-            if (
-                $EnvironmentName -ceq 'base' -and
-                -not [string]::IsNullOrWhiteSpace([string]$info.root_prefix)
-            ) {
-                $environmentRoots = @([string]$info.root_prefix) + $environmentRoots
-            }
-
-            foreach ($environmentRootValue in $environmentRoots) {
-                if ([string]::IsNullOrWhiteSpace([string]$environmentRootValue)) {
-                    continue
-                }
-
-                $environmentRoot = [System.IO.Path]::GetFullPath(
-                    ([string]$environmentRootValue).TrimEnd('\', '/')
-                )
-                $resolvedName = Split-Path -Path $environmentRoot -Leaf
-                if (
-                    $EnvironmentName -cne $resolvedName -and
-                    -not (
-                        $EnvironmentName -ceq 'base' -and
-                        [string]$environmentRoot -ceq [string]$info.root_prefix
-                    )
-                ) {
-                    continue
-                }
-
-                $pythonExecutable = Join-Path $environmentRoot 'python.exe'
-                if (-not (Test-Path -LiteralPath $pythonExecutable -PathType Leaf)) {
-                    continue
-                }
-
-                $resolvedPython = (Resolve-Path -LiteralPath $pythonExecutable).ProviderPath
-                $candidate = [pscustomobject]@{
-                    kind = 'conda'
-                    display_name = $resolvedPython
-                    program = $resolvedPython
-                    base_arguments = @()
-                    conda_env = $EnvironmentName
-                }
-                if (Test-ExecutorCandidate -Candidate $candidate) {
-                    return $candidate
-                }
-            }
-        }
-        catch {
-            continue
-        }
+        throw "Environment issue: repo-python broker resolution could not start: $($_.Exception.Message)"
     }
 
-    throw "Environment issue: the explicit Conda environment '$EnvironmentName' did not resolve to an executable python.exe that returned version information."
-}
-
-function Get-Executor {
-    param(
-        [AllowEmptyString()]
-        [string]$PreferredCondaEnv,
-
-        [switch]$PreferPyLauncher
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($PreferredCondaEnv)) {
-        return Get-CondaEnvironmentExecutor -EnvironmentName $PreferredCondaEnv
+    if ($resolutionExitCode -ne 0) {
+        $detail = ($resolutionOutput | Out-String).Trim()
+        if ([string]::IsNullOrWhiteSpace($detail)) {
+            $detail = 'no diagnostic output'
+        }
+        throw "Environment issue: repo-python broker resolution failed (exit $resolutionExitCode): $detail"
     }
 
-    if (-not $PreferPyLauncher) {
-        foreach ($program in @(Get-ApplicationCandidates -Name 'python')) {
-            $candidate = [pscustomobject]@{
-                kind = 'python'
-                display_name = $program
-                program = $program
-                base_arguments = @()
-                conda_env = ''
-            }
-            if (Test-ExecutorCandidate -Candidate $candidate) {
-                return $candidate
-            }
-        }
+    return [pscustomobject]@{
+        kind = 'repo-python'
+        display_name = 'repo-python (AI_Workbench runtime broker)'
+        program = $program
     }
-
-    foreach ($program in @(Get-ApplicationCandidates -Name 'py')) {
-        $candidate = [pscustomobject]@{
-            kind = 'py'
-            display_name = "$program -3"
-            program = $program
-            base_arguments = @('-3')
-            conda_env = ''
-        }
-        if (Test-ExecutorCandidate -Candidate $candidate) {
-            return $candidate
-        }
-    }
-
-    if (
-        -not [string]::IsNullOrWhiteSpace($env:CONDA_DEFAULT_ENV) -and
-        (Test-CondaEnvironmentName -Name $env:CONDA_DEFAULT_ENV)
-    ) {
-        try {
-            return Get-CondaEnvironmentExecutor -EnvironmentName $env:CONDA_DEFAULT_ENV
-        }
-        catch {
-            # Continue to the single environment error below.
-        }
-    }
-
-    if (@(Get-ApplicationCandidates -Name 'conda').Count -gt 0) {
-        throw 'Environment issue: no executable Python candidate was found, and Conda has no provided or active environment. Pass -CondaEnvName explicitly.'
-    }
-
-    throw 'Environment issue: no Python executor candidate successfully returned version information.'
 }
 
 function Get-CheckCatalog {
@@ -270,6 +121,11 @@ function Get-CheckCatalog {
         name = 'commit-convention'
         args = @('tests\test_commit_convention_check.py')
         expected_evidence = 'tests\test_commit_convention_check.py'
+    }
+    $runtimeAuthority = @{
+        name = 'runtime-authority'
+        args = @('tests\test_runtime_authority.py')
+        expected_evidence = 'tests\test_runtime_authority.py'
     }
     $hubAdapterContract = @{
         name = 'hub-adapter-contract'
@@ -312,6 +168,7 @@ function Get-CheckCatalog {
         governance = @(
             $adapterConsistency
             $commitConvention
+            $runtimeAuthority
             $hubAdapterContract
         )
         smoke = @(
@@ -319,6 +176,7 @@ function Get-CheckCatalog {
             $universalSkillRouting
             $adapterConsistency
             $commitConvention
+            $runtimeAuthority
             $hubAdapterContract
             $dryRunNoSideEffects
             $codexUserSkillsBootstrap
@@ -330,6 +188,7 @@ function Get-CheckCatalog {
             $universalSkillRouting
             $adapterConsistency
             $commitConvention
+            $runtimeAuthority
             $hubAdapterContract
             $dryRunNoSideEffects
             $codexUserSkillsBootstrap
@@ -377,7 +236,7 @@ function Invoke-Check {
         [hashtable]$CheckDefinition
     )
 
-    $arguments = @($Executor.base_arguments) + @($CheckDefinition.args)
+    $arguments = @($CheckDefinition.args)
     $expectedEvidence = [string]$CheckDefinition.expected_evidence
     Write-Info ("Running {0}: {1} {2}" -f $CheckDefinition.name, $Executor.display_name, ($CheckDefinition.args -join ' '))
 
@@ -389,21 +248,32 @@ function Invoke-Check {
             expected_evidence = $expectedEvidence
             status = 'failed'
             failure_type = 'logic'
+            executor_failure = $false
             exit_code = -1
         }
     }
 
+    $executorFailure = $false
+    $previousErrorActionPreference = $ErrorActionPreference
     try {
-        $nativeOutput = @(& $Executor.program @arguments 2>&1)
+        $ErrorActionPreference = 'Continue'
+        $nativeOutput = @()
+        & $Executor.program -PythonArgs $arguments 2>&1 |
+            Tee-Object -Variable nativeOutput |
+            Out-Host
         $exitCode = $LASTEXITCODE
         $output = ($nativeOutput | Out-String).TrimEnd()
     }
     catch {
         $output = $_.Exception.Message
-        $exitCode = 1
+        $exitCode = if ($LASTEXITCODE -gt 0) { $LASTEXITCODE } else { 1 }
+        $executorFailure = $true
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($output)) {
+    if ($executorFailure -and -not [string]::IsNullOrWhiteSpace($output)) {
         Write-Host $output
     }
 
@@ -415,8 +285,13 @@ function Invoke-Check {
             expected_evidence = $expectedEvidence
             status = 'passed'
             failure_type = ''
+            executor_failure = $false
             exit_code = 0
         }
+    }
+
+    if ($output -match 'repo-python:\s+ERROR:') {
+        $executorFailure = $true
     }
 
     return [pscustomobject]@{
@@ -425,18 +300,24 @@ function Invoke-Check {
         exact_argument_array = @($arguments)
         expected_evidence = $expectedEvidence
         status = 'failed'
-        failure_type = (Classify-Failure -Output $output)
+        failure_type = $(if ($executorFailure) { 'environment' } else { Classify-Failure -Output $output })
+        executor_failure = $executorFailure
         exit_code = $exitCode
     }
 }
 
 if ($PSBoundParameters.ContainsKey('CondaEnvName')) {
-    if (-not (Test-CondaEnvironmentName -Name $CondaEnvName)) {
-        [Console]::Error.WriteLine(
-            '[FAIL] Invalid CondaEnvName. Use 1-128 characters matching ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$; paths, whitespace, quotes, shell characters, and extra arguments are not allowed.'
-        )
-        exit 2
-    }
+    [Console]::Error.WriteLine(
+        '[FAIL] Runtime selection is governed by repo-python / AI_Workbench. -CondaEnvName is no longer supported.'
+    )
+    exit 2
+}
+
+if ($PSBoundParameters.ContainsKey('UsePyLauncher')) {
+    [Console]::Error.WriteLine(
+        '[FAIL] Runtime selection is governed by repo-python / AI_Workbench. -UsePyLauncher is no longer supported.'
+    )
+    exit 2
 }
 
 $repoRoot = Get-RepoRoot
@@ -447,7 +328,7 @@ if ($selectedChecks.Count -eq 0) {
     throw "No checks configured for group: $Checks"
 }
 
-$localTempRoot = Join-Path $repoRoot '.tmp\run_local_checks'
+$localTempRoot = Join-Path $repoRoot ('.tmp\r{0}' -f ([guid]::NewGuid().ToString('N').Substring(0, 8)))
 New-Item -ItemType Directory -Path $localTempRoot -Force | Out-Null
 
 $originalTemp = $env:TEMP
@@ -475,7 +356,7 @@ try {
     Write-Info "Temp root: $localTempRoot"
 
     try {
-        $executor = Get-Executor -PreferredCondaEnv $CondaEnvName -PreferPyLauncher:$UsePyLauncher
+        $executor = Get-RepoPythonExecutor
     }
     catch {
         $executorIssue = $_.Exception.Message
@@ -486,12 +367,6 @@ try {
     }
     else {
         Write-Info "Executor: $($executor.display_name)"
-        if ($executor.kind -eq 'conda') {
-            Write-Info "Conda environment: $($executor.conda_env)"
-        }
-        else {
-            Write-Info 'Conda environment: n/a'
-        }
     }
     Write-Info ("Selected checks: {0}" -f (($selectedChecks | ForEach-Object { $_.name }) -join ', '))
 
@@ -534,6 +409,9 @@ if (-not [string]::IsNullOrWhiteSpace($executorIssue)) {
 if ($failed.Count -gt 0) {
     foreach ($failure in $failed) {
         Write-Failure ("{0}: {1}" -f $failure.name, $failure.failure_type)
+    }
+    if (@($failed | Where-Object { $_.executor_failure }).Count -gt 0) {
+        exit 2
     }
     exit 1
 }

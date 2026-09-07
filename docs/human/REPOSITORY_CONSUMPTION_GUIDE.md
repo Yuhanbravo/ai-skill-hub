@@ -19,7 +19,7 @@ This document is the human-facing companion to the AI-facing discovery guide.
    - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\run_local_checks.ps1 -Checks smoke`
 2. For adapter consistency checks, pick the correct contract mode:
    - consumer project: `python tools/check_adapter_consistency.py --mode consumer`
-   - `ai-skill-hub` repository: `python tools/check_adapter_consistency.py --mode hub`
+   - `ai-skill-hub` repository: `repo-python tools/check_adapter_consistency.py --mode hub`
 3. Treat `skills/` as source of truth; adapter layers are discovery surfaces.
 
 ## Compatibility note

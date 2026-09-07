@@ -96,7 +96,7 @@ function Assert-CommitMessageValid {
         throw "Commit validator not found: $validatorPath"
     }
 
-    & python $validatorPath --message $Message
+    & repo-python -PythonArgs @($validatorPath, '--message', $Message)
     $exitCode = $LASTEXITCODE
     if ($exitCode -ne 0) {
         throw 'Commit message does not satisfy docs/governance/COMMIT_CONVENTION.md.'

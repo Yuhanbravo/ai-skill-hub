@@ -52,12 +52,14 @@ If adapter guidance and canonical skill content conflict, `skills/<skill>/SKILL.
 
 ## Local Validation
 
+Follow the Python runtime contract in `AGENTS.md`. Use `repo-python` for direct repository Python workloads; `tools/run_local_checks.ps1` remains the aggregate validation entry and delegates its Python workloads to that broker.
+
 ```powershell
 # Default smoke check
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\run_local_checks.ps1 -Checks smoke
 
 # Adapter consistency, hub mode
-python tools/check_adapter_consistency.py --mode hub
+repo-python tools/check_adapter_consistency.py --mode hub
 
 # Full validation
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\run_local_checks.ps1 -Checks all

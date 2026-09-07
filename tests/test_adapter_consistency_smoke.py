@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import subprocess
+import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -127,7 +128,7 @@ def test_cli_consumer_exit_code_and_output() -> None:
         build_sample_consumer_project(project_root)
 
         result = subprocess.run(
-            ["python", str(SCRIPT_PATH), str(project_root), "--mode", "consumer"],
+            [sys.executable, str(SCRIPT_PATH), str(project_root), "--mode", "consumer"],
             capture_output=True,
             text=True,
             check=False,
@@ -149,7 +150,7 @@ def test_cli_hub_exit_code_and_output() -> None:
         build_sample_hub_project(project_root)
 
         result = subprocess.run(
-            ["python", str(SCRIPT_PATH), str(project_root), "--mode", "hub"],
+            [sys.executable, str(SCRIPT_PATH), str(project_root), "--mode", "hub"],
             capture_output=True,
             text=True,
             check=False,
@@ -176,7 +177,7 @@ def test_wrong_contract_reports_clear_mode_context() -> None:
         )
 
         result = subprocess.run(
-            ["python", str(SCRIPT_PATH), str(project_root), "--mode", "consumer"],
+            [sys.executable, str(SCRIPT_PATH), str(project_root), "--mode", "consumer"],
             capture_output=True,
             text=True,
             check=False,

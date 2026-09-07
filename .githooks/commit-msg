@@ -1,3 +1,17 @@
 #!/bin/sh
 
-python "skills/skill-governance/scripts/commit_convention_check.py" "$1"
+repo_python_path=$(command -v repo-python.ps1 2>/dev/null || true)
+if [ -z "$repo_python_path" ]; then
+    user_profile_path=$(cygpath -u "$USERPROFILE") || exit 2
+    broker_candidate="$user_profile_path/.local/bin/repo-python.ps1"
+    if [ ! -f "$broker_candidate" ]; then
+        echo "commit-msg: repo-python broker wrapper is unavailable; refusing commit." >&2
+        exit 2
+    fi
+    repo_python_path=$broker_candidate
+fi
+
+export ASH_REPO_PYTHON_PATH="$repo_python_path"
+export ASH_COMMIT_MESSAGE_PATH="$1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
+    '& $env:ASH_REPO_PYTHON_PATH -PythonArgs @("skills/skill-governance/scripts/commit_convention_check.py", $env:ASH_COMMIT_MESSAGE_PATH)'

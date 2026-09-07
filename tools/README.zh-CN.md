@@ -215,7 +215,7 @@
 一次性配置当前机器（显式写入当前用户配置，不访问远端）：
 
 ```powershell
-<python> .\tools\ai_skill_hub_resolver.py configure `
+repo-python .\tools\ai_skill_hub_resolver.py configure `
   --hub-root 'D:\path\to\ai-skill-hub'
 ```
 
@@ -235,11 +235,11 @@
 只读解析、smoke 和 doctor：
 
 ```powershell
-<python> .\tools\ai_skill_hub_resolver.py resolve project-takeover
-<python> .\tools\ai_skill_hub_resolver.py smoke `
+repo-python .\tools\ai_skill_hub_resolver.py resolve project-takeover
+repo-python .\tools\ai_skill_hub_resolver.py smoke `
   --required-skill workflow-bootstrap `
   --required-skill project-takeover
-<python> .\tools\ai_skill_hub_resolver.py doctor `
+repo-python .\tools\ai_skill_hub_resolver.py doctor `
   --required-skill documentation-governance
 ```
 
@@ -261,7 +261,7 @@ resolver 的 canonical identity rule 是：Hub Git checkout 的 `skills/<skill-i
 最短调用：
 
 ```powershell
-python .\tools\generate_skill_metadata.py
+repo-python .\tools\generate_skill_metadata.py
 ```
 
 注意：
@@ -277,7 +277,7 @@ python .\tools\generate_skill_metadata.py
 最短调用：
 
 ```powershell
-python .\tools\skill_router.py "整理技能索引并检查文档治理"
+repo-python .\tools\skill_router.py "整理技能索引并检查文档治理"
 ```
 
 ## skill_pipeline.py
@@ -289,7 +289,7 @@ python .\tools\skill_router.py "整理技能索引并检查文档治理"
 最短调用：
 
 ```powershell
-python .\tools\skill_pipeline.py "接管仓库并更新状态"
+repo-python .\tools\skill_pipeline.py "接管仓库并更新状态"
 ```
 
 ## run_local_checks.ps1
@@ -312,16 +312,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\run_local_checks.p
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\run_local_checks.ps1 -Checks governance
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\run_local_checks.ps1 -Checks smoke
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\run_local_checks.ps1 -Checks all
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\run_local_checks.ps1 -Checks smoke -CondaEnvName prod-core-py312
 ```
 
 说明：
 
 - 支持的检查分组是 `router`、`governance`、`smoke`、`all`
-- 默认优先使用 `python`
-- 若 `python` 不可用，则回退到 `py -3`
-- `-CondaEnvName` 仅接受匹配 `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$` 的简单环境名
-- 显式 Conda 环境通过 `conda info --envs --json` 精确解析，并直接执行环境目录下的 `python.exe`
+- 所有 Python workload 都通过 `repo-python` 交给 AI_Workbench runtime broker
+- 仓库不通过 `PATH`、`py` launcher、Conda 环境名或绝对解释器路径选择 Python
+- broker 无法解析或调用时 fail closed，不尝试其他解释器
+- `-CondaEnvName` 与 `-UsePyLauncher` 仅暂时保留为显式 unsupported 错误，退出码为 `2`
 - 输出会显式区分 environment / permission / logic 三类失败
 - 这是本地维护入口，不是 CI、controller 或自动修复器
 
@@ -367,14 +366,14 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\init_project_runtime_pack.
 最短调用：
 
 ```powershell
-python .\tools\audit_derivative_surfaces.py
+repo-python .\tools\audit_derivative_surfaces.py
 ```
 
 常用调用：
 
 ```powershell
-python .\tools\audit_derivative_surfaces.py --root .
-python .\tools\audit_derivative_surfaces.py --preview-lines 20
+repo-python .\tools\audit_derivative_surfaces.py --root .
+repo-python .\tools\audit_derivative_surfaces.py --preview-lines 20
 ```
 
 说明：

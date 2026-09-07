@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -73,7 +74,7 @@ def test_cli_with_message_file() -> None:
         write_file(commit_message_path, "update docs\n")
 
         result = subprocess.run(
-            ["python", str(SCRIPT_PATH), str(commit_message_path)],
+            [sys.executable, str(SCRIPT_PATH), str(commit_message_path)],
             capture_output=True,
             text=True,
             check=False,
@@ -93,7 +94,7 @@ def test_cli_accepts_valid_message_file() -> None:
         )
 
         result = subprocess.run(
-            ["python", str(SCRIPT_PATH), str(commit_message_path)],
+            [sys.executable, str(SCRIPT_PATH), str(commit_message_path)],
             capture_output=True,
             text=True,
             check=False,

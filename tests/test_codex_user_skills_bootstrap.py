@@ -391,7 +391,7 @@ def run_local_check_runner(
     path_entries: tuple[Path, ...],
     *,
     executable: str | None = None,
-    conda_env_name: str | None = None,
+    legacy_arguments: tuple[str, ...] = (),
     extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     shell = executable or POWERSHELL or PWSH
@@ -407,7 +407,6 @@ def run_local_check_runner(
     env["HOME"] = str(fake_home)
     env["USERPROFILE"] = str(fake_home)
     env["CODEX_HOME"] = str(fake_codex_home)
-    env.pop("CONDA_DEFAULT_ENV", None)
     if extra_env:
         env.update(extra_env)
 
@@ -415,8 +414,7 @@ def run_local_check_runner(
     if Path(shell).name.lower() == "powershell.exe":
         command.extend(["-ExecutionPolicy", "Bypass"])
     command.extend(["-File", str(RUN_LOCAL_CHECKS), "-Checks", "router"])
-    if conda_env_name is not None:
-        command.extend(["-CondaEnvName", conda_env_name])
+    command.extend(legacy_arguments)
 
     return subprocess.run(
         command,
@@ -429,51 +427,42 @@ def run_local_check_runner(
     )
 
 
-def write_failing_python_stub(
-    directory: Path, invocation_log: Path | None = None
+def write_repo_python_stub(
+    directory: Path,
+    *,
+    resolve_exit: int = 0,
+    workload_exit: int = 0,
+    broker_error_on_workload: bool = False,
 ) -> Path:
-    stub = directory / "python.cmd"
-    log_command = (
-        f'echo %*>>"{invocation_log}"\n' if invocation_log is not None else ""
+    stub = directory / "repo-python.cmd"
+    workload_error = (
+        "echo repo-python: ERROR: simulated broker invocation failure 1>&2\n"
+        if broker_error_on_workload
+        else ""
     )
     write_text(
         stub,
         "@echo off\n"
-        + log_command
-        + "echo SIMULATED_WINDOWS_APPS_STUB 1>&2\n"
-        "exit /b 9009\n",
-    )
-    return stub
-
-
-def write_probe_spoof_python_stub(directory: Path, invocation_log: Path) -> Path:
-    stub = directory / "python.cmd"
-    write_text(
-        stub,
-        "@echo off\n"
-        'if "%~1"=="--version" (\n'
-        "  echo Python 3.12.99\n"
-        "  exit /b 0\n"
+        'echo %*>>"%REPO_PYTHON_INVOCATION_LOG%"\n'
+        'if /I "%~1"=="-BrokerResolveOnly" (\n'
+        "  echo MappingSource=SHARED_REGISTRY\n"
+        "  echo LogicalEnvironment=prod-core-py312\n"
+        f"  exit /b {resolve_exit}\n"
         ")\n"
-        f'echo %*>>"{invocation_log}"\n'
-        "exit /b 73\n",
+        + workload_error
+        + f"exit /b {workload_exit}\n",
     )
     return stub
 
 
-def write_argv_sitecustomize(directory: Path, invocation_log: Path, marker: Path) -> None:
-    write_text(
-        directory / "sitecustomize.py",
-        "import json\n"
-        "import os\n"
-        "import sys\n"
-        "from pathlib import Path\n"
-        "log = Path(os.environ['RUNNER_ARGV_LOG'])\n"
-        "with log.open('a', encoding='utf-8') as stream:\n"
-        "    stream.write(json.dumps(sys.argv) + '\\n')\n"
-        "if r'tests\\test_skill_router.py' in sys.argv:\n"
-        "    Path(os.environ['RUNNER_CHECK_MARKER']).touch()\n",
-    )
+def write_attractive_fallback_stubs(directory: Path) -> None:
+    for name in ("python", "py", "conda"):
+        write_text(
+            directory / f"{name}.cmd",
+            "@echo off\n"
+            f'echo {name} %*>>"%FALLBACK_INVOCATION_LOG%"\n'
+            "exit /b 0\n",
+        )
 
 
 def available_powershell_runtimes() -> list[str]:
@@ -484,193 +473,159 @@ def system32_path() -> Path:
     return Path(os.environ["SystemRoot"]) / "System32"
 
 
-def test_runner_skips_9009_python_stub_for_later_valid_python(tmp_path: Path) -> None:
-    stub_directory = tmp_path / "windowsapps-stub"
-    stub_invocations = tmp_path / "python-stub-invocations.log"
-    write_failing_python_stub(stub_directory, stub_invocations)
-
-    result = run_local_check_runner(
-        tmp_path,
-        (stub_directory, Path(sys.executable).parent, system32_path()),
-    )
-
-    combined_output = result.stdout + result.stderr
-    assert result.returncode == 0, combined_output
-    assert f"Executor: {sys.executable}".casefold() in combined_output.casefold()
-    assert "--version" in stub_invocations.read_text(encoding="utf-8")
-    assert "SIMULATED_WINDOWS_APPS_STUB" not in combined_output
-    assert "[PASS] All selected checks passed." in combined_output
-
-
-@pytest.mark.parametrize("executable", available_powershell_runtimes())
-def test_runner_rejects_unsafe_conda_names_before_any_execution(
-    tmp_path: Path, executable: str
-) -> None:
+def test_runner_uses_repo_python_as_only_automatic_authority(tmp_path: Path) -> None:
     stub_directory = tmp_path / "executor-stubs"
-    invocation_log = tmp_path / "unexpected-executor-invocations.log"
-    write_failing_python_stub(stub_directory, invocation_log)
-    unsafe_names = (
-        "prod-core-py312 python -c \"print('Python 3.12')\"",
-        "prod core py312",
-        'name"test',
-        "name'test",
-        "name;test",
-        "name&test",
-        "name|test",
-        r"..\env",
-        r"C:\env",
-        "",
-        " ",
-    )
-
-    for unsafe_name in unsafe_names:
-        result = run_local_check_runner(
-            tmp_path,
-            (stub_directory, system32_path()),
-            executable=executable,
-            conda_env_name=unsafe_name,
-        )
-        combined_output = result.stdout + result.stderr
-        assert result.returncode == 2, (unsafe_name, combined_output)
-        assert "Invalid CondaEnvName" in combined_output
-        assert "Running skill-router:" not in combined_output
-        assert "[PASS]" not in combined_output
-
-    assert not invocation_log.exists()
-
-
-@pytest.mark.parametrize("executable", available_powershell_runtimes())
-def test_runner_resolves_valid_conda_name_to_environment_python(
-    tmp_path: Path, executable: str
-) -> None:
-    stub_directory = tmp_path / "executor-stubs"
-    stub_directory.mkdir()
-    conda_root = tmp_path / "Conda Environments" / "prod-core-py312"
-    create_junction(conda_root, Path(sys.executable).parent)
-    conda_info = tmp_path / "conda-info.json"
-    write_text(
-        conda_info,
-        json.dumps({"envs": [str(conda_root)], "root_prefix": str(tmp_path / "base")}),
-    )
-    invocation_log = tmp_path / "conda-invocations.log"
-    write_text(
-        stub_directory / "conda.cmd",
-        "@echo off\n"
-        'echo %*>>"%EXECUTOR_INVOCATION_LOG%"\n'
-        'if /I not "%~1"=="info" exit /b 91\n'
-        'if /I not "%~2"=="--envs" exit /b 92\n'
-        'if /I not "%~3"=="--json" exit /b 93\n'
-        'type "%CONDA_INFO_JSON%"\n'
-        "exit /b 0\n",
-    )
+    invocation_log = tmp_path / "repo-python-invocations.log"
+    fallback_log = tmp_path / "fallback-invocations.log"
+    write_repo_python_stub(stub_directory)
+    write_attractive_fallback_stubs(stub_directory)
 
     result = run_local_check_runner(
         tmp_path,
         (stub_directory, system32_path()),
-        executable=executable,
-        conda_env_name="prod-core-py312",
         extra_env={
-            "CONDA_INFO_JSON": str(conda_info),
-            "EXECUTOR_INVOCATION_LOG": str(invocation_log),
+            "REPO_PYTHON_INVOCATION_LOG": str(invocation_log),
+            "FALLBACK_INVOCATION_LOG": str(fallback_log),
         },
     )
 
     combined_output = result.stdout + result.stderr
     assert result.returncode == 0, combined_output
-    assert f"Executor: {conda_root / 'python.exe'}".casefold() in combined_output.casefold()
-    assert "Conda environment: prod-core-py312" in combined_output
-    assert "info --envs --json" in invocation_log.read_text(encoding="utf-8")
-    assert " run " not in f" {invocation_log.read_text(encoding='utf-8')} "
+    invocations = invocation_log.read_text(encoding="utf-8").splitlines()
+    assert invocations == ["-BrokerResolveOnly", r"-PythonArgs tests\test_skill_router.py"]
+    assert not fallback_log.exists()
+    assert "Executor: repo-python (AI_Workbench runtime broker)" in combined_output
     assert "[PASS] All selected checks passed." in combined_output
 
 
-@pytest.mark.parametrize("executable", available_powershell_runtimes())
-def test_runner_preserves_spaced_python_path_and_executes_expected_check(
-    tmp_path: Path, executable: str
-) -> None:
-    python_runtime = tmp_path / "Python Runtime"
-    create_junction(python_runtime, Path(sys.executable).parent)
-    site_directory = tmp_path / "site hook"
-    site_directory.mkdir()
-    invocation_log = tmp_path / "python-argv.jsonl"
-    marker = tmp_path / "expected-check.marker"
-    write_argv_sitecustomize(site_directory, invocation_log, marker)
-
-    result = run_local_check_runner(
-        tmp_path,
-        (python_runtime, system32_path()),
-        executable=executable,
-        extra_env={
-            "PYTHONPATH": str(site_directory),
-            "RUNNER_ARGV_LOG": str(invocation_log),
-            "RUNNER_CHECK_MARKER": str(marker),
-        },
-    )
-
-    combined_output = result.stdout + result.stderr
-    assert result.returncode == 0, combined_output
-    assert f"Executor: {python_runtime / 'python.exe'}".casefold() in combined_output.casefold()
-    assert marker.exists()
-    invocations = [
-        json.loads(line) for line in invocation_log.read_text(encoding="utf-8").splitlines()
-    ]
-    assert any(r"tests\test_skill_router.py" in argv for argv in invocations)
-    assert "[PASS] skill-router" in combined_output
-
-
-@pytest.mark.parametrize("executable", available_powershell_runtimes())
-def test_runner_probe_success_cannot_replace_failed_check(
-    tmp_path: Path, executable: str
-) -> None:
-    stub_directory = tmp_path / "probe-spoof"
-    invocation_log = tmp_path / "formal-check-invocations.log"
-    write_probe_spoof_python_stub(stub_directory, invocation_log)
+def test_runner_fails_closed_when_broker_resolution_fails(tmp_path: Path) -> None:
+    stub_directory = tmp_path / "executor-stubs"
+    invocation_log = tmp_path / "repo-python-invocations.log"
+    write_repo_python_stub(stub_directory, resolve_exit=64)
 
     result = run_local_check_runner(
         tmp_path,
         (stub_directory, system32_path()),
-        executable=executable,
-    )
-
-    combined_output = result.stdout + result.stderr
-    assert result.returncode == 1, combined_output
-    assert r"tests\test_skill_router.py" in invocation_log.read_text(encoding="utf-8")
-    assert "[FAIL] skill-router" in combined_output
-    assert "[PASS] skill-router" not in combined_output
-    assert "[PASS] All selected checks passed." not in combined_output
-
-
-def test_runner_fails_before_checks_when_all_candidates_are_unusable(
-    tmp_path: Path,
-) -> None:
-    stub_directory = tmp_path / "only-invalid-python"
-    stub_invocations = tmp_path / "python-stub-invocations.log"
-    write_failing_python_stub(stub_directory, stub_invocations)
-
-    result = run_local_check_runner(
-        tmp_path,
-        (stub_directory, system32_path()),
+        extra_env={"REPO_PYTHON_INVOCATION_LOG": str(invocation_log)},
     )
 
     combined_output = result.stdout + result.stderr
     assert result.returncode == 2, combined_output
-    assert "no Python executor candidate successfully returned version information" in (
-        combined_output
-    )
+    assert invocation_log.read_text(encoding="utf-8").splitlines() == ["-BrokerResolveOnly"]
+    assert "repo-python broker resolution failed" in combined_output
     assert "Running skill-router:" not in combined_output
-    assert "--version" in stub_invocations.read_text(encoding="utf-8")
-    assert "SIMULATED_WINDOWS_APPS_STUB" not in combined_output
 
 
-def test_runner_uses_normal_valid_python_unchanged(tmp_path: Path) -> None:
+def test_runner_ignores_attractive_path_fallbacks_when_broker_fails(tmp_path: Path) -> None:
+    stub_directory = tmp_path / "executor-stubs"
+    invocation_log = tmp_path / "repo-python-invocations.log"
+    fallback_log = tmp_path / "fallback-invocations.log"
+    write_repo_python_stub(stub_directory, resolve_exit=64)
+    write_attractive_fallback_stubs(stub_directory)
+
     result = run_local_check_runner(
         tmp_path,
-        (Path(sys.executable).parent, system32_path()),
+        (stub_directory, system32_path()),
+        extra_env={
+            "REPO_PYTHON_INVOCATION_LOG": str(invocation_log),
+            "FALLBACK_INVOCATION_LOG": str(fallback_log),
+        },
+    )
+
+    combined_output = result.stdout + result.stderr
+    assert result.returncode == 2, combined_output
+    assert invocation_log.read_text(encoding="utf-8").splitlines() == ["-BrokerResolveOnly"]
+    assert not fallback_log.exists()
+
+
+def test_runner_keeps_workload_failure_as_check_failure(tmp_path: Path) -> None:
+    stub_directory = tmp_path / "executor-stubs"
+    invocation_log = tmp_path / "repo-python-invocations.log"
+    write_repo_python_stub(stub_directory, workload_exit=73)
+
+    result = run_local_check_runner(
+        tmp_path,
+        (stub_directory, system32_path()),
+        extra_env={"REPO_PYTHON_INVOCATION_LOG": str(invocation_log)},
+    )
+
+    combined_output = result.stdout + result.stderr
+    assert result.returncode == 1, combined_output
+    assert invocation_log.read_text(encoding="utf-8").splitlines() == [
+        "-BrokerResolveOnly",
+        r"-PythonArgs tests\test_skill_router.py",
+    ]
+    assert "[FAIL] skill-router (logic, exit=73)" in combined_output
+
+
+def test_runner_classifies_broker_invocation_failure_as_environment_failure(tmp_path: Path) -> None:
+    stub_directory = tmp_path / "executor-stubs"
+    invocation_log = tmp_path / "repo-python-invocations.log"
+    write_repo_python_stub(
+        stub_directory,
+        workload_exit=64,
+        broker_error_on_workload=True,
+    )
+
+    result = run_local_check_runner(
+        tmp_path,
+        (stub_directory, system32_path()),
+        extra_env={"REPO_PYTHON_INVOCATION_LOG": str(invocation_log)},
+    )
+
+    combined_output = result.stdout + result.stderr
+    assert result.returncode == 2, combined_output
+    assert "[FAIL] skill-router (environment, exit=" in combined_output
+
+
+@pytest.mark.parametrize("executable", available_powershell_runtimes())
+@pytest.mark.parametrize(
+    ("legacy_arguments", "option_name"),
+    [
+        (("-CondaEnvName", "prod-core-py312"), "-CondaEnvName"),
+        (("-UsePyLauncher",), "-UsePyLauncher"),
+    ],
+)
+def test_runner_rejects_legacy_runtime_options_before_broker_invocation(
+    tmp_path: Path,
+    executable: str,
+    legacy_arguments: tuple[str, ...],
+    option_name: str,
+) -> None:
+    stub_directory = tmp_path / "executor-stubs"
+    invocation_log = tmp_path / "repo-python-invocations.log"
+    write_repo_python_stub(stub_directory)
+
+    result = run_local_check_runner(
+        tmp_path,
+        (stub_directory, system32_path()),
+        executable=executable,
+        legacy_arguments=legacy_arguments,
+        extra_env={"REPO_PYTHON_INVOCATION_LOG": str(invocation_log)},
+    )
+
+    combined_output = result.stdout + result.stderr
+    assert result.returncode == 2, combined_output
+    assert option_name in combined_output
+    assert "no longer supported" in combined_output
+    assert "Running skill-router:" not in combined_output
+    assert not invocation_log.exists()
+
+
+def test_runner_success_path_returns_zero(tmp_path: Path) -> None:
+    stub_directory = tmp_path / "executor-stubs"
+    invocation_log = tmp_path / "repo-python-invocations.log"
+    write_repo_python_stub(stub_directory)
+
+    result = run_local_check_runner(
+        tmp_path,
+        (stub_directory, system32_path()),
+        extra_env={"REPO_PYTHON_INVOCATION_LOG": str(invocation_log)},
     )
 
     combined_output = result.stdout + result.stderr
     assert result.returncode == 0, combined_output
-    assert f"Executor: {sys.executable}".casefold() in combined_output.casefold()
+    assert "[PASS] skill-router" in combined_output
     assert "[PASS] All selected checks passed." in combined_output
 
 

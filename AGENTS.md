@@ -45,6 +45,12 @@ Conditional project-local canonical payload path (maintainer-filled only if this
 3. Record assumptions when ambiguity exists.
 4. Report what was changed and what was explicitly not implemented.
 
+## Python Runtime Contract
+- Python runtime authority is external to `ai-skill-hub`: ASH owns what to run, while AI_Workbench owns which Python runs it.
+- Use `repo-python` for repository Python execution and validation; AI_Workbench owns the logical runtime mapping.
+- Do not select Python through `PATH`, the `py` launcher, Conda activation or environment names, or absolute interpreter paths.
+- If `repo-python` cannot resolve the repository runtime, fail closed without falling back to another interpreter.
+
 ## Boundaries
 - Keep this file thin and reference-first.
 - Do not duplicate full workflow/governance/skill content from canonical guidance.
