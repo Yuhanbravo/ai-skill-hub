@@ -163,6 +163,11 @@ function Get-CheckCatalog {
         args = @('tests\test_skill_structure.py')
         expected_evidence = 'tests\test_skill_structure.py'
     }
+    $skillInventoryConsistency = @{
+        name = 'skill-inventory-consistency'
+        args = @('tests\test_skill_inventory_consistency.py')
+        expected_evidence = 'tests\test_skill_inventory_consistency.py'
+    }
     $projectRuntimePack = @{
         name = 'project-runtime-pack'
         args = @('-m', 'pytest', 'tests\test_init_project_runtime_pack.py', '-q', '-p', 'no:cacheprovider')
@@ -176,6 +181,7 @@ function Get-CheckCatalog {
             $commitConvention
             $runtimeAuthority
             $hubAdapterContract
+            $skillInventoryConsistency
         )
         smoke = @(
             $skillRouter
@@ -184,6 +190,7 @@ function Get-CheckCatalog {
             $commitConvention
             $runtimeAuthority
             $hubAdapterContract
+            $skillInventoryConsistency
             $dryRunNoSideEffects
             $codexUserSkillsBootstrap
             $reseedAudit
@@ -201,6 +208,7 @@ function Get-CheckCatalog {
             $reseedAudit
             $syncSmoke
             $skillStructure
+            $skillInventoryConsistency
             $projectRuntimePack
         )
     }

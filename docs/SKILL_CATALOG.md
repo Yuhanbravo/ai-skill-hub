@@ -22,8 +22,10 @@
 | skill path | short purpose | owner / category | canonical status | intended use case | related skills | side-effect level |
 |---|---|---|---|---|---|---|
 | `skills/chatgpt-handoff-pilot/` | 标准化 task package / bounded execution / execution report 交接壳层 | governance / handoff protocol | canonical | 需要跨角色交接并要求边界明确与可回执时 | `skills/workflow-bootstrap/`, `skills/update-project-status/`, `skills/system-handoff/` | documentation-only |
+| `skills/codex-project-workflow/` | 为单个仓库任务提供 Task Card、明确边界、preflight、验证与简洁回执 | workflow / bounded repository execution | canonical | 需要在项目本地规则下执行边界明确的实现、审阅或收尾任务时 | `skills/chatgpt-handoff-pilot/`, `skills/workflow-bootstrap/` | code / configuration / documentation |
 | `skills/documentation-governance/` | 文档治理审计与重复/边界诊断 | governance / documentation | canonical | 需要文档结构治理、重复检测、SSOT 边界检查时 | `skills/skill-governance/`, `skills/file-structure-check/` | documentation-only |
 | `skills/file-structure-check/` | 目录结构一致性检查与缺失/错放识别 | governance / structure audit | canonical | 需要快速识别目录偏移、漏文件、错层级放置时 | `skills/documentation-governance/`, `skills/project-takeover/` | read-only |
+| `skills/financial-data-agent-bootstrap/` | 为金融数据工程或运营项目建立 agent 规则、契约、验证与交接边界 | domain bootstrap | canonical | 需要为 financial-data 项目建立受控的 agent 协作与数据安全基础时 | `skills/financial-data-project-migration/`, `skills/chatgpt-handoff-pilot/` | documentation-only |
 | `skills/financial-data-project-migration/` | 金融数据项目迁移评估与保守迁移建议 | domain migration | canonical | 面向 financial-data 项目的迁移评估与落地边界规划 | `skills/project-takeover/`, `skills/system-takeover/` | documentation-only |
 | `skills/project-takeover/` | 单项目接管、现状盘点与 onboarding 输出 | takeover / project scope | canonical | 接手一个具体仓库并输出可执行接管包时 | `skills/system-takeover/`, `skills/workflow-bootstrap/` | documentation-only |
 | `skills/skill-governance/` | 单个 skill 的评分、诊断、受控重构建议 | governance / skill quality | canonical | 需要评估某个 skill 质量并给出治理动作时 | `skills/documentation-governance/`, `skills/update-project-status/` | documentation-only |

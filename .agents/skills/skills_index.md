@@ -16,5 +16,6 @@ This file mirrors the canonical skills for AI tools that can inspect `.agents/sk
 | `system-status-update` | `../../skills/system-status-update/` | `./system-status-update/SKILL.md` |
 | `system-takeover` | `../../skills/system-takeover/` | `./system-takeover/SKILL.md` |
 | `update-project-status` | `../../skills/update-project-status/` | `./update-project-status/SKILL.md` |
+| `workflow-bootstrap` | `../../skills/workflow-bootstrap/` | `./workflow-bootstrap/SKILL.md` |
 
 If deeper metadata is required, use `../../SKILLS_INDEX.md`.

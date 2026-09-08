@@ -18,8 +18,10 @@ For reusable templates, snippets, prompts, examples, and historical candidates, 
 ## 当前包含的 Skills
 
 - `chatgpt-handoff-pilot`
+- `codex-project-workflow`
 - `documentation-governance`
 - `file-structure-check`
+- `financial-data-agent-bootstrap`
 - `financial-data-project-migration`
 - `project-takeover`
 - `skill-governance`
