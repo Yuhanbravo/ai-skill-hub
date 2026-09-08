@@ -432,24 +432,37 @@ def write_repo_python_stub(
     *,
     resolve_exit: int = 0,
     workload_exit: int = 0,
-    broker_error_on_workload: bool = False,
+    start_workload: bool = True,
+    workload_diagnostic: str | None = None,
 ) -> Path:
     stub = directory / "repo-python.cmd"
-    workload_error = (
-        "echo repo-python: ERROR: simulated broker invocation failure 1>&2\n"
-        if broker_error_on_workload
+    marker_write = (
+        'if defined started_marker type nul > "!started_marker!"\n'
+        if start_workload
         else ""
     )
+    workload_output = f"echo {workload_diagnostic} 1>&2\n" if workload_diagnostic else ""
     write_text(
         stub,
         "@echo off\n"
+        "setlocal EnableDelayedExpansion\n"
         'echo %*>>"%REPO_PYTHON_INVOCATION_LOG%"\n'
-        'if /I "%~1"=="-BrokerResolveOnly" (\n'
+        'set "resolve_only="\n'
+        'set "started_marker="\n'
+        ":parse\n"
+        'if "%~1"=="" goto parsed\n'
+        'if /I "%~1"=="-BrokerResolveOnly" set "resolve_only=1"\n'
+        'if /I "%~1"=="--started-marker" set "started_marker=%~2"\n'
+        "shift\n"
+        "goto parse\n"
+        ":parsed\n"
+        "if defined resolve_only (\n"
         "  echo MappingSource=SHARED_REGISTRY\n"
         "  echo LogicalEnvironment=prod-core-py312\n"
         f"  exit /b {resolve_exit}\n"
         ")\n"
-        + workload_error
+        + marker_write
+        + workload_output
         + f"exit /b {workload_exit}\n",
     )
     return stub
@@ -492,7 +505,12 @@ def test_runner_uses_repo_python_as_only_automatic_authority(tmp_path: Path) -> 
     combined_output = result.stdout + result.stderr
     assert result.returncode == 0, combined_output
     invocations = invocation_log.read_text(encoding="utf-8").splitlines()
-    assert invocations == ["-BrokerResolveOnly", r"-PythonArgs tests\test_skill_router.py"]
+    assert len(invocations) == 2
+    assert "-BrokerProjectRoot" in invocations[0]
+    assert "-BrokerResolveOnly" in invocations[0]
+    assert "-BrokerProjectRoot" in invocations[1]
+    assert "run_governed_python_workload.py" in invocations[1]
+    assert r"tests\test_skill_router.py" in invocations[1]
     assert not fallback_log.exists()
     assert "Executor: repo-python (AI_Workbench runtime broker)" in combined_output
     assert "[PASS] All selected checks passed." in combined_output
@@ -511,7 +529,9 @@ def test_runner_fails_closed_when_broker_resolution_fails(tmp_path: Path) -> Non
 
     combined_output = result.stdout + result.stderr
     assert result.returncode == 2, combined_output
-    assert invocation_log.read_text(encoding="utf-8").splitlines() == ["-BrokerResolveOnly"]
+    invocations = invocation_log.read_text(encoding="utf-8").splitlines()
+    assert len(invocations) == 1
+    assert "-BrokerResolveOnly" in invocations[0]
     assert "repo-python broker resolution failed" in combined_output
     assert "Running skill-router:" not in combined_output
 
@@ -534,7 +554,9 @@ def test_runner_ignores_attractive_path_fallbacks_when_broker_fails(tmp_path: Pa
 
     combined_output = result.stdout + result.stderr
     assert result.returncode == 2, combined_output
-    assert invocation_log.read_text(encoding="utf-8").splitlines() == ["-BrokerResolveOnly"]
+    invocations = invocation_log.read_text(encoding="utf-8").splitlines()
+    assert len(invocations) == 1
+    assert "-BrokerResolveOnly" in invocations[0]
     assert not fallback_log.exists()
 
 
@@ -551,11 +573,10 @@ def test_runner_keeps_workload_failure_as_check_failure(tmp_path: Path) -> None:
 
     combined_output = result.stdout + result.stderr
     assert result.returncode == 1, combined_output
-    assert invocation_log.read_text(encoding="utf-8").splitlines() == [
-        "-BrokerResolveOnly",
-        r"-PythonArgs tests\test_skill_router.py",
-    ]
-    assert "[FAIL] skill-router (logic, exit=73)" in combined_output
+    invocations = invocation_log.read_text(encoding="utf-8").splitlines()
+    assert len(invocations) == 2
+    assert "run_governed_python_workload.py" in invocations[1]
+    assert "[FAIL] skill-router (workload, exit=73)" in combined_output
 
 
 def test_runner_classifies_broker_invocation_failure_as_environment_failure(tmp_path: Path) -> None:
@@ -564,7 +585,8 @@ def test_runner_classifies_broker_invocation_failure_as_environment_failure(tmp_
     write_repo_python_stub(
         stub_directory,
         workload_exit=64,
-        broker_error_on_workload=True,
+        start_workload=False,
+        workload_diagnostic="repo-python: ERROR: simulated broker invocation failure",
     )
 
     result = run_local_check_runner(
@@ -576,6 +598,59 @@ def test_runner_classifies_broker_invocation_failure_as_environment_failure(tmp_
     combined_output = result.stdout + result.stderr
     assert result.returncode == 2, combined_output
     assert "[FAIL] skill-router (environment, exit=" in combined_output
+
+
+def test_runner_requires_start_marker_even_when_broker_returns_zero(tmp_path: Path) -> None:
+    stub_directory = tmp_path / "executor-stubs"
+    invocation_log = tmp_path / "repo-python-invocations.log"
+    write_repo_python_stub(stub_directory, workload_exit=0, start_workload=False)
+
+    result = run_local_check_runner(
+        tmp_path,
+        (stub_directory, system32_path()),
+        extra_env={"REPO_PYTHON_INVOCATION_LOG": str(invocation_log)},
+    )
+
+    combined_output = result.stdout + result.stderr
+    assert result.returncode == 2, combined_output
+    assert "[FAIL] skill-router (environment, exit=0)" in combined_output
+
+
+def test_runner_ignores_broker_like_workload_diagnostic(tmp_path: Path) -> None:
+    stub_directory = tmp_path / "executor-stubs"
+    invocation_log = tmp_path / "repo-python-invocations.log"
+    write_repo_python_stub(
+        stub_directory,
+        workload_exit=73,
+        workload_diagnostic="repo-python: ERROR: expected negative-case diagnostic",
+    )
+
+    result = run_local_check_runner(
+        tmp_path,
+        (stub_directory, system32_path()),
+        extra_env={"REPO_PYTHON_INVOCATION_LOG": str(invocation_log)},
+    )
+
+    combined_output = result.stdout + result.stderr
+    assert result.returncode == 1, combined_output
+    assert "expected negative-case diagnostic" in combined_output
+    assert "[FAIL] skill-router (workload, exit=73)" in combined_output
+
+
+def test_runner_treats_started_workload_exit_64_as_check_failure(tmp_path: Path) -> None:
+    stub_directory = tmp_path / "executor-stubs"
+    invocation_log = tmp_path / "repo-python-invocations.log"
+    write_repo_python_stub(stub_directory, workload_exit=64)
+
+    result = run_local_check_runner(
+        tmp_path,
+        (stub_directory, system32_path()),
+        extra_env={"REPO_PYTHON_INVOCATION_LOG": str(invocation_log)},
+    )
+
+    combined_output = result.stdout + result.stderr
+    assert result.returncode == 1, combined_output
+    assert "[FAIL] skill-router (workload, exit=64)" in combined_output
 
 
 @pytest.mark.parametrize("executable", available_powershell_runtimes())

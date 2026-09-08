@@ -64,6 +64,11 @@ function Get-RepoRoot {
 }
 
 function Get-RepoPythonExecutor {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepositoryRoot
+    )
+
     $command = @(
         Get-Command 'repo-python' -ErrorAction SilentlyContinue |
             Where-Object { $_.CommandType -in @('Application', 'ExternalScript') }
@@ -79,7 +84,7 @@ function Get-RepoPythonExecutor {
     }
 
     try {
-        $resolutionOutput = @(& $program -BrokerResolveOnly 2>&1)
+        $resolutionOutput = @(& $program -BrokerProjectRoot $RepositoryRoot -BrokerResolveOnly 2>&1)
         $resolutionExitCode = $LASTEXITCODE
     }
     catch {
@@ -98,6 +103,7 @@ function Get-RepoPythonExecutor {
         kind = 'repo-python'
         display_name = 'repo-python (AI_Workbench runtime broker)'
         program = $program
+        project_root = $RepositoryRoot
     }
 }
 
@@ -200,40 +206,19 @@ function Get-CheckCatalog {
     }
 }
 
-function Classify-Failure {
-    param(
-        [AllowEmptyString()]
-        [string]$Output
-    )
-
-    if (
-        $Output -match 'PermissionError' -or
-        $Output -match 'Access is denied' -or
-        $Output -match '拒绝访问' -or
-        $Output -match 'ShellExecuteExW failed'
-    ) {
-        return 'permission'
-    }
-
-    if (
-        $Output -match 'No module named' -or
-        $Output -match 'ModuleNotFoundError' -or
-        $Output -match 'not recognized as the name of a cmdlet' -or
-        $Output -match 'Environment issue:'
-    ) {
-        return 'environment'
-    }
-
-    return 'logic'
-}
-
 function Invoke-Check {
     param(
         [Parameter(Mandatory = $true)]
         [object]$Executor,
 
         [Parameter(Mandatory = $true)]
-        [hashtable]$CheckDefinition
+        [hashtable]$CheckDefinition,
+
+        [Parameter(Mandatory = $true)]
+        [string]$LauncherPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$MarkerRoot
     )
 
     $arguments = @($CheckDefinition.args)
@@ -253,12 +238,20 @@ function Invoke-Check {
         }
     }
 
+    $startedMarker = Join-Path $MarkerRoot ('.governed-python-{0}.started' -f ([guid]::NewGuid().ToString('N')))
+    $brokerArguments = @(
+        $LauncherPath
+        '--started-marker'
+        $startedMarker
+        '--'
+    ) + $arguments
     $executorFailure = $false
+    $governedPythonStarted = $false
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
         $nativeOutput = @()
-        & $Executor.program -PythonArgs $arguments 2>&1 |
+        & $Executor.program -BrokerProjectRoot $Executor.project_root -PythonArgs $brokerArguments 2>&1 |
             Tee-Object -Variable nativeOutput |
             Out-Host
         $exitCode = $LASTEXITCODE
@@ -270,6 +263,10 @@ function Invoke-Check {
         $executorFailure = $true
     }
     finally {
+        $governedPythonStarted = Test-Path -LiteralPath $startedMarker -PathType Leaf
+        if ($governedPythonStarted) {
+            Remove-Item -LiteralPath $startedMarker -Force -ErrorAction SilentlyContinue
+        }
         $ErrorActionPreference = $previousErrorActionPreference
     }
 
@@ -277,7 +274,9 @@ function Invoke-Check {
         Write-Host $output
     }
 
-    if ($exitCode -eq 0) {
+    $executorFailure = -not $governedPythonStarted
+
+    if ($exitCode -eq 0 -and -not $executorFailure) {
         return [pscustomobject]@{
             name = $CheckDefinition.name
             resolved_executor = $Executor.program
@@ -286,12 +285,9 @@ function Invoke-Check {
             status = 'passed'
             failure_type = ''
             executor_failure = $false
+            governed_python_started = $governedPythonStarted
             exit_code = 0
         }
-    }
-
-    if ($output -match 'repo-python:\s+ERROR:') {
-        $executorFailure = $true
     }
 
     return [pscustomobject]@{
@@ -300,8 +296,9 @@ function Invoke-Check {
         exact_argument_array = @($arguments)
         expected_evidence = $expectedEvidence
         status = 'failed'
-        failure_type = $(if ($executorFailure) { 'environment' } else { Classify-Failure -Output $output })
+        failure_type = $(if ($executorFailure) { 'environment' } else { 'workload' })
         executor_failure = $executorFailure
+        governed_python_started = $governedPythonStarted
         exit_code = $exitCode
     }
 }
@@ -321,6 +318,10 @@ if ($PSBoundParameters.ContainsKey('UsePyLauncher')) {
 }
 
 $repoRoot = Get-RepoRoot
+$launcherPath = Join-Path $repoRoot 'tools\run_governed_python_workload.py'
+if (-not (Test-Path -LiteralPath $launcherPath -PathType Leaf)) {
+    throw "Governed workload launcher not found: $launcherPath"
+}
 $catalog = Get-CheckCatalog
 $selectedChecks = @($catalog[$Checks])
 
@@ -328,8 +329,9 @@ if ($selectedChecks.Count -eq 0) {
     throw "No checks configured for group: $Checks"
 }
 
-$localTempRoot = Join-Path $repoRoot ('.tmp\r{0}' -f ([guid]::NewGuid().ToString('N').Substring(0, 8)))
-New-Item -ItemType Directory -Path $localTempRoot -Force | Out-Null
+$tempParent = Join-Path $repoRoot '.tmp'
+$ownedTempRoot = Join-Path $tempParent ('r{0}' -f ([guid]::NewGuid().ToString('N').Substring(0, 8)))
+New-Item -ItemType Directory -Path $ownedTempRoot -Force | Out-Null
 
 $originalTemp = $env:TEMP
 $originalTmp = $env:TMP
@@ -337,26 +339,29 @@ $originalTmpDir = $env:TMPDIR
 $originalPythonUtf8 = $env:PYTHONUTF8
 $originalPythonIoEncoding = $env:PYTHONIOENCODING
 
-$env:TEMP = $localTempRoot
-$env:TMP = $localTempRoot
-$env:TMPDIR = $localTempRoot
+$env:TEMP = $ownedTempRoot
+$env:TMP = $ownedTempRoot
+$env:TMPDIR = $ownedTempRoot
 $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
 
 $results = @()
 $executor = $null
 $executorIssue = ''
+$locationPushed = $false
+$tempCleanup = 'PASS'
 
 try {
     Push-Location $repoRoot
+    $locationPushed = $true
 
     Write-Section 'Local validation setup'
     Write-Info "Repository root: $repoRoot"
     Write-Info "Check group: $Checks"
-    Write-Info "Temp root: $localTempRoot"
+    Write-Info "Temp root: $ownedTempRoot"
 
     try {
-        $executor = Get-RepoPythonExecutor
+        $executor = Get-RepoPythonExecutor -RepositoryRoot $repoRoot
     }
     catch {
         $executorIssue = $_.Exception.Message
@@ -373,7 +378,7 @@ try {
     if ([string]::IsNullOrWhiteSpace($executorIssue)) {
         Write-Section 'Running checks'
         foreach ($checkDefinition in $selectedChecks) {
-            $result = Invoke-Check -Executor $executor -CheckDefinition $checkDefinition
+            $result = Invoke-Check -Executor $executor -CheckDefinition $checkDefinition -LauncherPath $launcherPath -MarkerRoot $ownedTempRoot
             $results += $result
 
             if ($result.status -eq 'passed') {
@@ -386,12 +391,32 @@ try {
     }
 }
 finally {
-    Pop-Location
+    if ($locationPushed) {
+        Pop-Location
+    }
     $env:TEMP = $originalTemp
     $env:TMP = $originalTmp
     $env:TMPDIR = $originalTmpDir
     $env:PYTHONUTF8 = $originalPythonUtf8
     $env:PYTHONIOENCODING = $originalPythonIoEncoding
+
+    if (Test-Path -LiteralPath $ownedTempRoot) {
+        try {
+            $resolvedTempParent = (Resolve-Path -LiteralPath $tempParent).ProviderPath.TrimEnd('\')
+            $resolvedOwnedTempRoot = (Resolve-Path -LiteralPath $ownedTempRoot).ProviderPath
+            if (-not $resolvedOwnedTempRoot.StartsWith(
+                "$resolvedTempParent\",
+                [System.StringComparison]::OrdinalIgnoreCase
+            )) {
+                throw "Owned temp root escaped repository temp parent: $resolvedOwnedTempRoot"
+            }
+            Remove-Item -LiteralPath $resolvedOwnedTempRoot -Recurse -Force -ErrorAction Stop
+        }
+        catch {
+            $tempCleanup = 'WARNING'
+            Write-Warning "Could not clean owned temp root '$ownedTempRoot': $($_.Exception.Message)"
+        }
+    }
 }
 
 Write-Section 'Summary'
@@ -400,6 +425,7 @@ $failed = @($results | Where-Object { $_.status -eq 'failed' })
 
 Write-Info "Passed: $($passed.Count)"
 Write-Info "Failed: $($failed.Count)"
+Write-Info "Temp cleanup: $tempCleanup"
 
 if (-not [string]::IsNullOrWhiteSpace($executorIssue)) {
     Write-Failure "Executor setup: environment"

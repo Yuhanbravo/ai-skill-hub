@@ -30,6 +30,7 @@ def test_repo_python_is_the_runtime_authority() -> None:
 
 def test_runner_has_no_parallel_runtime_selector() -> None:
     runner = read("tools/run_local_checks.ps1")
+    launcher = read("tools/run_governed_python_workload.py")
     forbidden = (
         r"Get-Command\s+['\"]?(?:python|py|conda)['\"]?",
         r"CONDA_DEFAULT_ENV",
@@ -42,15 +43,19 @@ def test_runner_has_no_parallel_runtime_selector() -> None:
         assert not re.search(pattern, runner, flags=re.IGNORECASE), pattern
 
     assert "-BrokerResolveOnly" in runner
+    assert "-BrokerProjectRoot" in runner
     assert "-CondaEnvName is no longer supported" in runner
     assert "-UsePyLauncher is no longer supported" in runner
+    assert "sys.executable" in launcher
+    assert "repo-python" not in launcher
+    assert "conda" not in launcher.lower()
 
 
 def test_bundle_and_hook_invoke_only_repo_python() -> None:
     bundle = read("tools/export_bundle.ps1")
     hook = read(".githooks/commit-msg")
 
-    assert "& repo-python -PythonArgs @($validatorPath, '--message', $Message)" in bundle
+    assert "& repo-python -BrokerProjectRoot $RepositoryPath -PythonArgs @($validatorPath, $messageFile)" in bundle
     assert not re.search(r"(?m)^\s*&\s+(?:python|py|conda)\b", bundle, flags=re.IGNORECASE)
     assert "command -v repo-python.ps1" in hook
     assert ".local/bin/repo-python.ps1" in hook

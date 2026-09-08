@@ -69,7 +69,7 @@ function Get-CommitMessage {
     )
 
     if (-not [string]::IsNullOrWhiteSpace($ProvidedMessage)) {
-        return $ProvidedMessage.Trim()
+        return $ProvidedMessage
     }
 
     Write-Host "" 
@@ -96,10 +96,22 @@ function Assert-CommitMessageValid {
         throw "Commit validator not found: $validatorPath"
     }
 
-    & repo-python -PythonArgs @($validatorPath, '--message', $Message)
-    $exitCode = $LASTEXITCODE
-    if ($exitCode -ne 0) {
-        throw 'Commit message does not satisfy docs/governance/COMMIT_CONVENTION.md.'
+    $messageFile = Join-Path ([System.IO.Path]::GetTempPath()) (
+        '.ash-commit-message-{0}.txt' -f ([guid]::NewGuid().ToString('N'))
+    )
+    try {
+        $utf8WithoutBom = [System.Text.UTF8Encoding]::new($false)
+        [System.IO.File]::WriteAllText($messageFile, $Message, $utf8WithoutBom)
+        & repo-python -BrokerProjectRoot $RepositoryPath -PythonArgs @($validatorPath, $messageFile)
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -ne 0) {
+            throw 'Commit message does not satisfy docs/governance/COMMIT_CONVENTION.md.'
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $messageFile -PathType Leaf) {
+            Remove-Item -LiteralPath $messageFile -Force -ErrorAction Stop
+        }
     }
 }
 
