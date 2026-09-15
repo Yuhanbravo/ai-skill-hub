@@ -247,6 +247,8 @@ resolver 的 canonical identity rule 是：Hub Git checkout 的 `skills/<skill-i
 
 `smoke` 的每项结果只能是 `RESOLVED`、`MISSING`、`INVALID` 或 `HUB_UNAVAILABLE`，整体为 `PASS` 或 `BLOCKED`。`doctor` 在 routing 完整时返回 `ADOPT_AS_IS`，否则返回 `BLOCKED`；它不扫描或迁移 Consumer Project，因此不会凭空输出 `MIGRATION_REQUIRED`。未声明任何 required Skill 时两者都以 `INSUFFICIENT_REQUIREMENTS` fail closed；只有显式传 `--allow-empty-requirements` 表示 "zero skills is intentional" 才放行，且输出带 `zero_requirements_intentional` 标记，automation 不得把空需求集当作 migration safe。
 
+若 resolver 输出 `HUB_GIT_SAFE_DIRECTORY_UNTRUSTED`，表示 Locator 与 Hub 目录结构已经通过检查，但运行该命令的 Windows identity 尚未将 Locator 指向的 checkout 标记为 Git `safe.directory`。这不是 Consumer Project 的内容或 canonical Skill identity 错误。维护者应在确认该精确 checkout 可信后，在该执行环境的 Git trust 配置中加入该路径（例如 `git config --global --add safe.directory D:/path/to/ai-skill-hub`），然后重跑原命令；不要使用 `safe.directory=*` 或将机器绝对路径写回 Consumer Project。resolver 保持只读，不会自动修改 Git 配置。
+
 ## generate_skill_metadata.py
 
 用途：

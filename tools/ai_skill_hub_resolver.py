@@ -29,6 +29,9 @@ LOCATOR_KIND = "ai-skill-hub.canonical-hub-locator"
 ROUTER_SKILL_NAME = "ai-skill-hub-router"
 SKILL_ID_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 NAME_PATTERN = re.compile(r"(?m)^name:\s*[\"']?([^\"'\r\n]+)[\"']?\s*$")
+SAFE_DIRECTORY_REJECTION_PATTERN = re.compile(
+    r"detected dubious ownership.*safe\.directory", re.IGNORECASE | re.DOTALL
+)
 
 CONFIG_HOME_ENV_VAR = "AI_SKILL_HUB_CONFIG_HOME"
 AGENTS_HOME_ENV_VAR = "AI_SKILL_HUB_AGENTS_HOME"
@@ -261,6 +264,12 @@ def read_locator(locator_path: Path) -> tuple[dict[str, Any] | None, str, str]:
     return parsed, "VALID", "LOCATOR_VALID"
 
 
+def git_checkout_failure_code(*stderr_values: str) -> str:
+    if SAFE_DIRECTORY_REJECTION_PATTERN.search("\n".join(stderr_values)):
+        return "HUB_GIT_SAFE_DIRECTORY_UNTRUSTED"
+    return "HUB_CHECKOUT_INVALID"
+
+
 def check_hub(hub_root: Path) -> HubCheck:
     if not hub_root.exists() or not hub_root.is_dir() or is_reparse_point(hub_root):
         return HubCheck("UNAVAILABLE", "HUB_CHECKOUT_UNAVAILABLE")
@@ -290,7 +299,9 @@ def check_hub(hub_root: Path) -> HubCheck:
         return HubCheck("UNAVAILABLE", "GIT_UNAVAILABLE")
 
     if top_level.returncode != 0 or bare.returncode != 0:
-        return HubCheck("INVALID", "HUB_CHECKOUT_INVALID")
+        return HubCheck(
+            "INVALID", git_checkout_failure_code(top_level.stderr, bare.stderr)
+        )
     if bare.stdout.strip().lower() == "true":
         return HubCheck("INVALID", "HUB_CHECKOUT_BARE")
     try:

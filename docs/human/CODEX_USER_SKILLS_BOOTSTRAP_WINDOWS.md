@@ -72,6 +72,14 @@ Consumer Project 的可复用只读预检：
 
 `smoke` 对每个逻辑 ID 输出 `RESOLVED`、`MISSING`、`INVALID` 或 `HUB_UNAVAILABLE`，再输出 `PASS` 或 `BLOCKED`。`doctor` 只诊断 locator/Hub/required Skill routing；它不扫描 Consumer Project 的 legacy debt，所以成功时为 `ADOPT_AS_IS`、失败时为 `BLOCKED`，不会推断 `MIGRATION_REQUIRED`。
 
+若输出 `HUB_GIT_SAFE_DIRECTORY_UNTRUSTED`，Locator 已定位到存在的 Hub checkout，但当前 Windows execution identity 未将该 checkout 视为可信 Git 目录。先核验 Locator 指向的精确 Hub 路径，再由维护者在该执行环境的 Git trust 配置中添加该单一路径，例如：
+
+```powershell
+git config --global --add safe.directory D:/path/to/ai-skill-hub
+```
+
+不要配置 `safe.directory=*`，不要把 Hub 绝对路径写进 Consumer Project，也不要期待 resolver 自动修改 Git 配置；完成配置后重跑原来的 `resolve`、`smoke` 或 `doctor` 命令。
+
 未声明任何 required Skill 时，`smoke` / `doctor` 都以 `INSUFFICIENT_REQUIREMENTS` fail closed：空需求集不是 routing 健康的证据，automation 不得据此判定 migration safe。只有当调用方显式确认 "zero skills is intentional" 时，才可通过 `--allow-empty-requirements` 放行，此时输出带 `zero_requirements_intentional` 标记，与 "No required skills discovered" 严格区分。
 
 合法 canonical Skill 的身份是当前 Hub checkout 中的 `skills/<skill-id>/SKILL.md`：ID 语法、目录名和 frontmatter `name` 必须完全一致；任何其他目录声称同一 `name` 也会以 ambiguity 失败。`_protocol` 是 Bundle dependency container，不是可由 logical Skill ID 解析的 Skill。`SKILLS_INDEX.md` 和 `skills_index.json` 可作 discovery 辅助，但不替代这个 fail-closed identity rule。

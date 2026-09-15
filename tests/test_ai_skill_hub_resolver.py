@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
@@ -8,6 +9,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from unittest.mock import patch
 
 
 # Exact known stale router shape from the pre-remediation generation (base
@@ -57,6 +59,11 @@ KNOWN_STALE_ROUTER_TEXT = (
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "tools" / "ai_skill_hub_resolver.py"
+RESOLVER_SPEC = importlib.util.spec_from_file_location("ai_skill_hub_resolver_under_test", SCRIPT)
+assert RESOLVER_SPEC is not None and RESOLVER_SPEC.loader is not None
+RESOLVER = importlib.util.module_from_spec(RESOLVER_SPEC)
+sys.modules[RESOLVER_SPEC.name] = RESOLVER
+RESOLVER_SPEC.loader.exec_module(RESOLVER)
 
 MACHINE_ENV_VARS = (
     "AI_SKILL_HUB_CONFIG_HOME",
@@ -678,6 +685,35 @@ def test_invalid_hub_and_missing_canonical_entry_are_blocked() -> None:
         assert payload["resolutions"][0]["code"] == "CANONICAL_ENTRY_MISSING"
 
 
+def test_dubious_hub_checkout_ownership_is_reported_explicitly() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        hub_root = build_hub(root)
+        dubious_ownership = subprocess.CompletedProcess(
+            args=["git"],
+            returncode=128,
+            stdout="",
+            stderr=(
+                "fatal: detected dubious ownership in repository at 'D:/canonical-hub'\n"
+                "To add an exception for this directory, call: git config --global "
+                "--add safe.directory D:/canonical-hub\n"
+            ),
+        )
+        with patch.object(
+            RESOLVER.subprocess,
+            "run",
+            side_effect=[dubious_ownership, dubious_ownership],
+        ):
+            hub_check = RESOLVER.check_hub(hub_root)
+
+        assert hub_check.state == "INVALID"
+        assert hub_check.code == "HUB_GIT_SAFE_DIRECTORY_UNTRUSTED"
+        assert (
+            RESOLVER.git_checkout_failure_code("fatal: unrelated git failure")
+            == "HUB_CHECKOUT_INVALID"
+        )
+
+
 def test_unsupported_locator_schema_is_invalid_without_fallback() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)
@@ -798,6 +834,7 @@ def main() -> int:
         test_doctor_reports_adopt_as_is_when_required_routing_is_complete,
         test_negative_resolution_fails_closed_for_invalid_missing_and_unavailable_states,
         test_invalid_hub_and_missing_canonical_entry_are_blocked,
+        test_dubious_hub_checkout_ownership_is_reported_explicitly,
         test_unsupported_locator_schema_is_invalid_without_fallback,
         test_competing_declared_canonical_identity_is_ambiguous_and_blocked,
         test_known_stale_router_shape_is_blocked_then_reconciled_by_documented_removal,
