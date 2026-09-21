@@ -1,8 +1,10 @@
-# AGENTS.md Thin Entrypoint Draft (Phase 2)
+# AGENTS.md Thin Entrypoint Draft (Historical Phase 2 Asset)
 
-Status: this is a canonical draft asset for a **future project-side runtime pack**.
+Status: maintained historical design asset for project-side thin entries. The Phase 2 label records lineage, not active phase or rollout authorization.
 
 This draft does not create a real `AGENTS.md` in this repository.
+
+Applicability: this draft is for the default `AI_LEVEL_CONFIG_BACK_REFERENCE` mode. Existing, unmigrated Project Runtime Pack consumers continue to use their project manifest, project routers, commit pinning, and pinned/portable validation. Applying this draft to change modes requires a separate migration task; neither mode is an automatic fallback for the other.
 
 ## Purpose
 
@@ -14,25 +16,27 @@ Define the future `AGENTS.md` as the unified project-side master entrypoint.
 
 ## Canonical Guidance
 
-Future `AGENTS.md` should include an explicit identity statement and a required canonical reading list.
+Future `AGENTS.md` should include an explicit identity statement, project-local authoritative references, and a logical-ID list for shared canonical guidance.
 
 ### Recommended fixed identity statement
 
 > This file is the project-side runtime master entrypoint. It is dispatch-oriented and reference-first. It is not canonical source-of-truth.
 
-### Required canonical reading list (example structure)
+### Required guidance list (example structure)
 
-Use explicit file paths in the target project (not directory-only references). At minimum include:
+Use explicit paths for project-local authority and logical Skill IDs for cross-repository guidance. At minimum include:
 
 1. Workflow bootstrap canonical guidance.
 2. Handoff / bounded execution canonical guidance (`chatgpt-handoff-pilot` related).
-3. Project-local canonical skill payload (if present).
+3. Project-local authoritative documents or contracts.
 
-Recommended placeholder path format:
+Recommended logical-ID format:
 
-- `skills/workflow-bootstrap/SKILL.md`
-- `skills/chatgpt-handoff-pilot/SKILL.md`
-- `<project-local-canonical-skill-path>`
+- `workflow-bootstrap`
+- `chatgpt-handoff-pilot`
+- `<project-authoritative-doc-path>`
+
+In this draft's default back-reference mode, the consumer resolves logical IDs through its user-level router, neutral locator, and Hub resolver. Only the locator stores the machine Hub checkout path. Do not assume the consumer contains `skills/`, copy canonical payload into it, add a project commit pin, or fall back to a Runtime Pack when routing fails.
 
 ## High-Level Working Rules
 
@@ -64,13 +68,16 @@ Future `AGENTS.md` should explicitly include all of the following:
 
 ## Conflict Resolution
 
-Future `AGENTS.md` should include an explicit precedence rule:
+Future `AGENTS.md` should include an explicit authority rule:
 
-- if `AGENTS.md` conflicts with canonical guidance, canonical guidance wins.
+- user/task sources own current authorization;
+- project documents own project facts;
+- resolved canonical Skills own reusable method;
+- an irreconcilable same-subject conflict pauses only the dependent action.
 
 ### Recommended fixed conflict text
 
-> On conflict, canonical guidance takes precedence over this entrypoint.
+> Apply each source within its stated ownership. If two applicable sources conflict on the same subject and cannot be reconciled, stop the affected action and report the conflict.
 
 ## Suggested Minimal Structure
 

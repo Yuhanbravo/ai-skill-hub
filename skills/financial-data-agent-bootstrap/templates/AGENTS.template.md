@@ -6,6 +6,8 @@
 
 本文件是项目级薄入口，保持 reference-first。它不是完整项目规则库。
 
+本模板面向默认 `AI_LEVEL_CONFIG_BACK_REFERENCE` 模式。已有且未迁移的 Project Runtime Pack 项目继续使用其项目 manifest、项目 router、commit pinning 与 pinned/portable 校验；不要用本模板覆盖这些入口。模式切换必须由独立迁移任务授权并留证，两种模式不得互相自动 fallback。
+
 ## Required Reading
 
 实施前必须读取：
@@ -15,9 +17,9 @@
 3. `<source-contract-path>`
 4. `<validation-plan-path>`
 5. `<current-task-package-path>`
-6. `skills/financial-data-agent-bootstrap/SKILL.md`
+6. In the default back-reference mode, logical Skill ID `financial-data-agent-bootstrap`, resolved through the user-level `ai-skill-hub-router`, neutral locator, and Hub resolver; read the returned canonical `SKILL.md` and required supporting resources completely.
 
-如有冲突，以当前 task package 和项目维护者确认过的项目 docs 为准。
+不要在消费者仓库写入机器 Hub 绝对路径或复制 canonical Skill payload。当前授权由用户与 task package 负责，项目事实由维护者确认的 project docs / contracts 负责，通用方法由 resolved canonical Skill 负责；同一事项仍有不可消解冲突时，仅停止依赖该冲突的动作并报告。
 
 ## Hard Boundaries
 
@@ -67,4 +69,4 @@
 
 ## Conflict Resolution
 
-如果本文件与 canonical skill、project docs 或 task package 冲突，停止并报告冲突。不要把本文件扩写成第二套本地规则库。
+按事项应用各来源的权威归属；只有同一事项存在不可消解冲突时，才停止受影响动作并报告。不要把本文件扩写成第二套本地规则库。

@@ -1,8 +1,10 @@
-# Project-Side AGENTS.md Template Sketch (Phase 3A)
+# Project-Side AGENTS.md Template Sketch (Historical Phase 3A Asset)
 
-Status: this is a canonical sketch asset for a **future project-side runtime pack**.
+Status: maintained historical design asset for project-side thin entries. Use the current routing and ownership notes below; the Phase 3A label records lineage, not active phase or rollout authorization.
 
 This document does **not** create a real `AGENTS.md` in this repository.
+
+Applicability: this sketch targets new or maintained consumers using the default `AI_LEVEL_CONFIG_BACK_REFERENCE` mode. Do not apply it over an existing, unmigrated Project Runtime Pack entry; that mode keeps its project manifest, project routers, commit pinning, and pinned/portable validation. A mode change requires a separately authorized migration, and neither mode is a fallback for the other.
 
 ## Purpose
 
@@ -26,9 +28,11 @@ The following parts should stay fixed across future project-side uses because th
    - It is dispatch-oriented and reference-first.
    - It is not canonical source-of-truth.
 2. Required canonical reading requirement:
-   - the file must list explicit canonical file-path references.
+   - consumers list logical Skill IDs and project-local authoritative documents;
+   - resolve Skill IDs through the consumer's router / locator / resolver before reading the returned canonical paths.
 3. Conflict rule:
-   - canonical guidance wins on conflict.
+   - authority is applied by subject: reusable method comes from the resolved canonical Skill, while project facts and current authorization remain project/task-owned;
+   - an irreconcilable same-subject conflict pauses only the dependent action.
 4. Anti-expansion boundary:
    - do not expand the file into a second local rulebook.
 5. Execution orientation:
@@ -41,7 +45,7 @@ The following parts should stay fixed across future project-side uses because th
 The following parts should stay project-supplied:
 
 1. Project name or repository identity.
-2. Concrete project-local canonical skill path, if the repo has one.
+2. Concrete project-local authoritative documents and any logical Skill IDs the workflow actually requires.
 3. Project-specific local boundaries that are not reusable across repos.
 4. Optional local working constraints that are truly high-level and do not duplicate canonical guidance.
 
@@ -65,12 +69,14 @@ This file is the project-side runtime master entrypoint. It is dispatch-oriented
 
 Project: `<project-name>`
 
-## Canonical Guidance
-Read the required canonical guidance before implementation:
+## Required Guidance
+Read project-local authority and resolve the required shared guidance before implementation:
 
-- `<canonical-workflow-guidance-path>`
-- `<canonical-handoff-guidance-path>`
-- `<project-local-canonical-skill-path>` (if present)
+- Project docs: `<project-authoritative-doc-path>`
+- Logical Skill ID: `workflow-bootstrap`
+- Logical Skill ID: `chatgpt-handoff-pilot` (when bounded execution applies)
+
+This template assumes the default `AI_LEVEL_CONFIG_BACK_REFERENCE` mode. Use the consumer's user-level router, neutral locator, and resolver. Accept only a resolved canonical entry, then read its required supporting resources. Do not store a machine Hub path, copied Skill payload, or project commit pin here. If this project instead has an unmigrated Project Runtime Pack, do not use this template to replace its manifest/router/pinning entry; mode migration is separate work and routing failure does not authorize fallback.
 
 ## High-Level Working Rules
 1. Read required canonical guidance before implementation.
@@ -85,7 +91,7 @@ Read the required canonical guidance before implementation:
 - If a reusable rule is missing, add it to canonical guidance rather than expanding this file.
 
 ## Conflict Resolution
-If this file conflicts with canonical guidance, canonical guidance takes precedence.
+Apply each source within its ownership: task/user input controls current authorization, project docs control project facts, and resolved canonical Skills control reusable method. If applicable sources conflict on the same subject and the conflict cannot be reconciled, stop only the affected action and report it.
 ```
 
 ## Field Notes
@@ -106,12 +112,12 @@ Project-fill:
 Fixed:
 
 - explicit requirement to read canonical guidance first;
-- explicit file-path-based reading list shape.
+- logical-ID routing plus explicit project-local document references.
 
 Project-fill:
 
-- concrete resolved file paths;
-- optional project-local canonical payload path.
+- logical Skill IDs required by the workflow;
+- project-local authoritative document paths.
 
 ### High-Level Working Rules
 
@@ -141,7 +147,8 @@ Project-fill:
 
 Fixed:
 
-- canonical guidance wins.
+- authority is subject-specific rather than a blanket “canonical wins” rule;
+- unresolved same-subject conflicts fail closed for the dependent action.
 
 Project-fill:
 
