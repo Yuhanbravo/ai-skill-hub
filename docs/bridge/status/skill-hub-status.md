@@ -14,13 +14,21 @@
 
 
 
-- Updated at: `2026-08-26`
+- Updated at: `2026-09-23`
 - Scope: `ai-skill-hub`
 - Method: `system-status-update` wrapper over `update-project-status`
 - Config: `.codex/skill-config/update-project-status.json`
-- Data sources: Git history through reviewed implementation `343e778483a8ceaab4f0298d6f1d3a2c6da51b02` on local `main` (the frozen universal-routing line remains ahead of `origin/main`), working tree, `skills/`, `.agents/`, `.github/`, `tools/`, `docs/status/`, `docs/HANDOFF.md`, historical Consumer Adoption Pilot evidence, and the Project Runtime Pack MVP V1 closure records.
+- Data sources: Git history and remote `main` verification through `2d58c090986665ebeed3f04e1584353b718e5ad4`, working tree, local validation output, `skills/`, `.agents/`, `.github/`, `tools/`, `docs/status/`, `docs/HANDOFF.md`, historical Consumer Adoption Pilot evidence, and Project Runtime Pack MVP V1 closure records.
 - Note: the `2026-08-25` refresh froze the concrete `AI_LEVEL_CONFIG_BACK_REFERENCE_V1` contract under the already-frozen Consumer Adoption Architecture V1 and recorded the universal-routing remediation state; it did not reopen or rewrite any historical pilot evidence.
 - Note: this refresh (`2026-08-26`) records the `ASH_STALE_ROUTER_RECONCILIATION_V1` independent local final closure (docs + tests only; frozen resolver semantics unchanged) and meets the 14-day freshness gate against the `2026-08-25` baseline.
+- Note: the `2026-09-23` refresh records the verified fast-forward publication of four previously local commits, `7cab9bf` through `2d58c09`. The remote `main` was independently queried at `2d58c090986665ebeed3f04e1584353b718e5ad4` after the push. This publication does not itself grant independent acceptance of every change.
+
+## September 2026 Mainline Publication
+
+- Publication: `PASS`, ordinary fast-forward push from `0ea8487001935d7a62d7b8c715c9b3c78ff618da` to `2d58c090986665ebeed3f04e1584353b718e5ad4`; remote `refs/heads/main` was verified at the latter SHA.
+- Scope: bridge compatibility refresh, `codex-project-workflow` invocation example and index, explicit untrusted-checkout reporting, and Hub agent-entry / consumer-guidance alignment. The frozen routing and Runtime Pack compatibility boundaries remain distinct.
+- Validation: `git diff --check origin/main..HEAD` passed before publication. The `smoke` run passed skill-router, universal-skill-routing, adapter-consistency-smoke, commit-convention, runtime-authority, and hub-adapter-contract. It was interrupted during skill-inventory-consistency after prolonged silence; the aggregate smoke result is **not PASS**. The resolver run included one host-privilege symlink skip.
+- Closure scope: remote publication and local documentation receipt only. This record is not a new independent review, consumer rollout, or claim that the full validation suite passed. Evidence: `tasks/ash_2026_09_23_main_publication_execution_report.md`.
 
 ## Project Runtime Pack MVP V1
 
@@ -265,6 +273,7 @@ codex/ai-level-universal-routing-v1
 - `system-handoff` is the handoff receiver and handoff output boundary owner.
 - This refresh records the `2026-07-27` closure baseline at current observed `origin/main` HEAD `3919677`, preserving phase consistency with the handoff document.
 - Current-state SSOT remains the `docs/status/skill-hub-status.md` plus `docs/HANDOFF.md` pair unless a maintainer explicitly declares another current-state SSOT.
+- The September mainline publication has been recorded in this status and the handoff without changing the system phase.
 
 ### Review Tooling Layer
 
@@ -278,8 +287,9 @@ codex/ai-level-universal-routing-v1
 ## Current Phase
 
 - System phase: `Phase 3 - Controlled System`.
+- September mainline publication: remote `main` verified at `2d58c090986665ebeed3f04e1584353b718e5ad4` after the four-commit fast-forward push; full smoke validation remains unconfirmed.
 - Closeout state: P0 asset entrypoint cleanup, DeepSeek review configuration, and P1 examples coverage are merged and complete.
-- Current observed main HEAD after the latest governance documentation update: `3919677`.
+- Current observed published main HEAD before this documentation refresh: `2d58c09`.
 - Completed P1 rounds:
   - P1-A: `chatgpt-handoff-pilot` invocation examples, PR #15, commit `8a734ff`.
   - P1-B: `project-takeover` invocation examples, PR #16, commit `ae97ab4`.
@@ -289,8 +299,9 @@ codex/ai-level-universal-routing-v1
   - PR #20: `financial-data-agent-bootstrap` F0 skill skeleton.
   - PR #21: README structure fix; skill structure validation passes.
 - Phase judgment: the system is no longer in P1 examples coverage construction.
-- Direction: the current program direction is the read-only Consumer Adoption Pilot above; keep the separate P1 line closed, and start any future P2 work only through a separate planning / backlog-selection round.
+- Direction: consumer onboarding follows the frozen `AI_LEVEL_CONFIG_BACK_REFERENCE` architecture through a lightweight preflight; project-local migration remains on demand, and Hub remediation remains defect driven. The separate P1 line stays closed.
 - Freshness gate: this refresh on `2026-07-27` meets the 14-day freshness threshold.
+- Freshness gate: this `2026-09-23` refresh restores the status baseline after the prior `2026-08-26` update exceeded 14 days.
 
 ## Capabilities
 
@@ -314,6 +325,8 @@ codex/ai-level-universal-routing-v1
 - Stable: Consumer Adoption Architecture V1 is frozen around AI-level config back-reference, lightweight preflight, migration-on-demand, and defect-driven Hub remediation.
 
 ## Risks / Gaps
+
+- The `2026-09-23` aggregate smoke run was interrupted at skill-inventory-consistency; its remaining checks were not observed. Re-run that check in a separate bounded diagnostic before claiming aggregate validation PASS.
 
 - Preserve the historical A1R / A2 CLI / A2 App facts; do not recast the superseded pilot as failed or manufacture a complete historical pass.
 - Do not retain A2 App rerun as an architecture-closure requirement.
