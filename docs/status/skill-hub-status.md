@@ -8,6 +8,7 @@
 - Note: the `2026-08-25` refresh froze the concrete `AI_LEVEL_CONFIG_BACK_REFERENCE_V1` contract under the already-frozen Consumer Adoption Architecture V1 and recorded the universal-routing remediation state; it did not reopen or rewrite any historical pilot evidence.
 - Note: this refresh (`2026-08-26`) records the `ASH_STALE_ROUTER_RECONCILIATION_V1` independent local final closure (docs + tests only; frozen resolver semantics unchanged) and meets the 14-day freshness gate against the `2026-08-25` baseline.
 - Note: the `2026-09-23` refresh records the verified fast-forward publication of four previously local commits, `7cab9bf` through `2d58c09`. The remote `main` was independently queried at `2d58c090986665ebeed3f04e1584353b718e5ad4` after the push. This publication does not itself grant independent acceptance of every change.
+- Note: the `2026-10-05` bounded update registers `ffdata` as a Consumer Project under the frozen `AI_LEVEL_CONFIG_BACK_REFERENCE` architecture (logical Skill IDs only; no canonical payload copy; no machine-specific Hub absolute path in the consumer repository) and records the pre-existing absence of the user-level routing layer on this host as a machine-level gap. It is not a full status refresh and does not change the system phase.
 
 ## September 2026 Mainline Publication
 
@@ -95,6 +96,14 @@ Current_Implementation_HEAD=
 - Observed compatibility debt: stale or absent project-relative `.codex/skills` references in project guidance / wrapper surfaces.
 - Historical provisional direction: `MIGRATE_PROJECT_RELATIVE_REFERENCES`, applicable only to the observed `Derivative_Data` debt; not a universal requirement, default migration policy, or rollout authorization.
 - A2 App: `NOT_COMPLETED_AND_NO_LONGER_REQUIRED_FOR_ARCHITECTURE_CLOSURE`.
+
+### Registered Consumer: `ffdata` (2026-10-05)
+
+- `ffdata`（AI_Workbench `AI_DEV_QUEUE.md` Active Queue 注册项目，`D:\dev\ffdata`）于 2026-10-05 经工作项 `FFDATA_PROJECT_FORMALIZATION_AND_BASELINE_V1` 登记为 Hub Consumer Project，采用冻结的 `AI_LEVEL_CONFIG_BACK_REFERENCE` 架构。
+- Consumer 入口仅声明 logical Skill IDs（`financial-data-agent-bootstrap`、`workflow-bootstrap`、`chatgpt-handoff-pilot`、`project-takeover`、`update-project-status`）；无 canonical payload 拷贝；Consumer 仓库不存储机器 Hub 绝对路径（机器级 Hub 位置由 AI_Workbench 注册表持有）。
+- 项目治理、业务边界、task packages、validation、status、handoff 与 evidence 均由 `ffdata` 仓库自持。
+- 已知 machine-level 缺口：本机 user-level `ai-skill-hub-router` 适配器与 `~/.ai-skill-hub/locator.json` 未安装；在该主机上 Consumer 侧 back-reference 路由 fail closed，直至经单独授权完成机器级路由安装。本登记不授权 router 安装、consumer migration、rollout 或 Hub 产品变更。
+- 本次为 bounded consumer registration 记录，非全量 status refresh，不改变系统 phase（`Phase 3 - Controlled System`）。
 
 ### Lightweight Adoption Preflight
 
